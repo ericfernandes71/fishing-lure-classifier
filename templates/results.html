@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Results - Fishing Lure Classifier</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f8ff;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c5aa0;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            color: #2c5aa0;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 8px 16px;
+            border: 2px solid #2c5aa0;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        .nav-links a:hover {
+            background-color: #2c5aa0;
+            color: white;
+        }
+        .filters {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .filters select, .filters button {
+            padding: 8px 16px;
+            margin: 0 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .filters button {
+            background-color: #2c5aa0;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .filters button:hover {
+            background-color: #1e3f7a;
+        }
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .results-table th, .results-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .results-table th {
+            background-color: #2c5aa0;
+            color: white;
+        }
+        .results-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        .file-size {
+            font-family: monospace;
+            color: #666;
+        }
+        .date-badge {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-view {
+            background-color: #4caf50;
+            color: white;
+        }
+        .btn-download {
+            background-color: #2196f3;
+            color: white;
+        }
+        .btn:hover {
+            opacity: 0.8;
+        }
+        .no-results {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px;
+        }
+        .cleanup-section {
+            background-color: #fff3e0;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+            border-left: 4px solid #ff9800;
+        }
+        .cleanup-section h3 {
+            color: #e65100;
+            margin-top: 0;
+        }
+        .cleanup-section input {
+            width: 80px;
+            padding: 8px;
+            margin: 0 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .cleanup-section button {
+            background-color: #ff9800;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .cleanup-section button:hover {
+            background-color: #f57c00;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Analysis Results</h1>
+        
+        <div class="nav-links">
+            <a href="/">🏠 Home</a>
+            <a href="/results">📊 Results</a>
+        </div>
+        
+        <div class="filters">
+            <h3>Filter Results</h3>
+            <form method="GET" action="/results">
+                <label for="date">Date:</label>
+                <select name="date" id="date">
+                    <option value="">All Dates</option>
+                    {% for result in results %}
+                        {% if result.date != date_filter %}
+                            <option value="{{ result.date }}">{{ result.date }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+                <button type="submit">Filter</button>
+                <a href="/results" class="btn btn-view">Clear Filter</a>
+            </form>
+        </div>
+        
+        {% if results %}
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Filename</th>
+                        <th>Size</th>
+                        <th>Created</th>
+                        <th>Modified</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in results %}
+                    <tr>
+                        <td><span class="date-badge">{{ result.date }}</span></td>
+                        <td>{{ result.filename }}</td>
+                        <td class="file-size">{{ (result.size_bytes / 1024) | round(1) }} KB</td>
+                        <td>{{ result.created }}</td>
+                        <td>{{ result.modified }}</td>
+                        <td class="action-buttons">
+                            <a href="/results/{{ result.date }}/{{ result.filename }}" class="btn btn-view">View</a>
+                            <a href="{{ result.full_path }}" download class="btn btn-download">Download</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <p style="margin-top: 20px; color: #666;">
+                Total results: {{ results | length }}
+            </p>
+        {% else %}
+            <div class="no-results">
+                <h3>No analysis results found</h3>
+                <p>Upload some lure images to see results here!</p>
+                <a href="/" class="btn btn-view">Go to Upload</a>
+            </div>
+        {% endif %}
+        
+        <div class="cleanup-section">
+            <h3>🧹 Cleanup Old Results</h3>
+            <p>Remove analysis results older than:</p>
+            <input type="number" id="daysToKeep" value="30" min="1" max="365">
+            <span>days</span>
+            <button onclick="cleanupResults()">Cleanup</button>
+            <p style="margin-top: 10px; font-size: 14px; color: #666;">
+                This will permanently delete old result files to save disk space.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function cleanupResults() {
+            const daysToKeep = document.getElementById('daysToKeep').value;
+            
+            if (!confirm(`Are you sure you want to delete results older than ${daysToKeep} days? This action cannot be undone.`)) {
+                return;
+            }
+            
+            fetch('/cleanup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    days_to_keep: parseInt(daysToKeep)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Cleanup completed! Deleted ${data.deleted_count} files.`);
+                    location.reload();
+                } else {
+                    alert('Cleanup failed: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error during cleanup: ' + error.message);
+            });
+        }
+        
+        // Auto-select current date filter
+        document.addEventListener('DOMContentLoaded', function() {
+            const dateSelect = document.getElementById('date');
+            if (dateSelect) {
+                dateSelect.value = '{{ date_filter or "" }}';
+            }
+        });
+    </script>
+</body>
+</html>
