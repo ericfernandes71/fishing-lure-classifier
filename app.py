@@ -153,6 +153,44 @@ def cleanup():
     except Exception as e:
         return jsonify({'error': f'Cleanup failed: {str(e)}'})
 
+@app.route('/estimate-cost', methods=['POST'])
+def estimate_cost():
+    """Estimate API cost for hybrid analysis"""
+    if not hybrid_classifier:
+        return jsonify({'error': 'Hybrid classifier not initialized. Please set up your API key first.'})
+    
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'})
+        
+        if file:
+            # Save file temporarily
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            try:
+                # Get cost estimate
+                cost_estimate = hybrid_classifier.estimate_api_cost(filepath)
+                
+                # Clean up temporary file
+                os.remove(filepath)
+                
+                return jsonify(cost_estimate)
+                
+            except Exception as e:
+                # Clean up on error
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                raise e
+                
+    except Exception as e:
+        return jsonify({'error': f'Cost estimation failed: {str(e)}'})
+
 @app.route('/setup-hybrid', methods=['POST'])
 def setup_hybrid():
     """Setup hybrid classifier with OpenAI API key"""

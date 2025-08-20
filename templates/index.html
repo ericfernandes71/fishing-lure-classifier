@@ -175,6 +175,20 @@
             cursor: not-allowed;
             transform: none;
         }
+        .upload-btn#estimate-cost-btn {
+            background: #ffc107;
+            color: #212529;
+            border: 2px solid #e0a800;
+        }
+        .upload-btn#estimate-cost-btn:hover {
+            background: #e0a800;
+            transform: translateY(-2px);
+        }
+        .upload-btn#estimate-cost-btn:disabled {
+            background: #6c757d;
+            border-color: #6c757d;
+            color: white;
+        }
         .results-section {
             margin-top: 30px;
             display: none;
@@ -311,6 +325,45 @@
         .status-ready { background: #28a745; }
         .status-pending { background: #ffc107; }
         .status-disabled { background: #dc3545; }
+        .lure-details {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid #f0f0f0;
+        }
+        .detail-section {
+            margin-bottom: 15px;
+        }
+        .detail-section h4 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: #3498db;
+        }
+        .detail-section p {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        .conditions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .condition-item {
+            background: #e3f2fd;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .colors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .color-condition {
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
     </style>
 </head>
 <body>
@@ -373,6 +426,9 @@
                     <button class="upload-btn" onclick="resetUploadArea()" style="background: #6c757d;">
                         🔄 Reset
                     </button>
+                    <button class="upload-btn" id="estimate-cost-btn" onclick="estimateCost()" disabled style="background: #ffc107; color: #212529;">
+                        💰 Estimate Cost
+                    </button>
                 </div>
             </div>
             
@@ -431,13 +487,10 @@
                     📁 Choose Image
                 </button>
             `;
-            
-            // Clear file data and disable analyze button
-            selectedFile = null;
+            selectedFile = null; // Clear file data
             document.getElementById('analyze-btn').disabled = true;
-            
-            // Re-attach event listeners
-            setupFileInputListeners();
+            document.getElementById('estimate-cost-btn').disabled = true;
+            setupFileInputListeners(); // Re-attach event listeners
         }
         
         function setupFileInputListeners() {
@@ -451,6 +504,7 @@
                     selectedFile = file; // Store the file globally
                     console.log('File selected:', file.name, file.size);
                     document.getElementById('analyze-btn').disabled = false;
+                    document.getElementById('estimate-cost-btn').disabled = false;
                     
                     // Show file selection feedback
                     const uploadArea = document.getElementById('upload-area');
@@ -468,6 +522,7 @@
                     console.log('No files selected');
                     selectedFile = null;
                     document.getElementById('analyze-btn').disabled = true;
+                    document.getElementById('estimate-cost-btn').disabled = true;
                 }
             });
         }
@@ -505,6 +560,7 @@
                     const file = files[0];
                     selectedFile = file; // Store the file globally
                     document.getElementById('analyze-btn').disabled = false;
+                    document.getElementById('estimate-cost-btn').disabled = false;
                     
                     // Show file selection feedback
                     this.classList.add('file-selected');
@@ -531,6 +587,63 @@
             } else {
                 apiKeySection.classList.remove('show');
                 analyzeBtn.disabled = false;
+            }
+        }
+        
+        async function estimateCost() {
+            if (!selectedFile) {
+                alert('Please select an image first');
+                return;
+            }
+            
+            if (selectedClassifier !== 'hybrid') {
+                alert('Cost estimation is only available for hybrid analysis');
+                return;
+            }
+            
+            if (!hybridReady) {
+                alert('Please set up your OpenAI API key first');
+                return;
+            }
+            
+            console.log('Estimating cost for:', selectedFile.name);
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            try {
+                const response = await fetch('/estimate-cost', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert(`Cost estimation failed: ${result.error}`);
+                } else {
+                    const costInfo = `
+💰 Cost Estimate for Hybrid Analysis:
+
+📊 Image Details:
+• Original Size: ${result.original_size_kb.toFixed(1)} KB
+• Compressed Size: ${result.compressed_size_kb.toFixed(1)} KB
+• Compression: ${result.compression_ratio}
+
+💳 API Costs:
+• Estimated Tokens: ${result.estimated_tokens.toLocaleString()}
+• Estimated Cost: ${result.estimated_cost_usd}
+• Efficiency: ${result.cost_efficiency}
+
+💡 The hybrid classifier will automatically compress your image to optimize costs while preserving important lure details.
+                    `;
+                    
+                    alert(costInfo);
+                }
+                
+            } catch (error) {
+                console.error('Cost estimation error:', error);
+                alert('Failed to estimate cost. Please try again.');
             }
         }
         
@@ -668,14 +781,28 @@
             console.log('feature_analysis:', results.feature_analysis);
             console.log('analysis_method:', results.analysis_method);
             
+            // Get the correct lure type and confidence for display
+            let lureType = 'Unknown Lure Type';
+            let confidence = 0;
+            
+            if (results.hybrid_decision) {
+                // Hybrid results
+                lureType = results.hybrid_decision.final_lure_type || 'Unknown Lure Type';
+                confidence = results.hybrid_decision.adjusted_confidence || 0;
+            } else if (results.predicted_lure_type) {
+                // Traditional results
+                lureType = results.predicted_lure_type;
+                confidence = results.confidence || 0;
+            }
+            
             let html = `
                 <div class="result-header">
                     <div>
-                        <div class="lure-type">${results.predicted_lure_type || 'Unknown Lure Type'}</div>
+                        <div class="lure-type">${lureType}</div>
                         <div class="analysis-method">${results.analysis_method || 'Computer Vision Analysis'}</div>
                     </div>
                     <div class="confidence">
-                        ${results.confidence || 0}%
+                        ${confidence}%
                     </div>
                 </div>
             `;
@@ -769,6 +896,92 @@
                         <strong>Adjusted Confidence:</strong> ${hybrid.adjusted_confidence}%<br>
                         <strong>CV Validation Score:</strong> +${hybrid.cv_validation_score} points<br>
                         <strong>Reasoning:</strong> ${hybrid.reasoning}
+                    </div>
+                `;
+                
+                // Display detailed lure information if available
+                if (hybrid.lure_details && Object.keys(hybrid.lure_details).length > 0) {
+                    const details = hybrid.lure_details;
+                    html += `
+                        <h3>🎣 Lure Information & Fishing Tips</h3>
+                        <div class="lure-details">
+                            <div class="detail-section">
+                                <h4>📖 Description</h4>
+                                <p>${details.description || 'No description available'}</p>
+                            </div>
+                            
+                            <div class="detail-section">
+                                <h4>🎯 Target Species</h4>
+                                <p>${Array.isArray(details.target_species) ? details.target_species.join(', ') : 'Unknown'}</p>
+                            </div>
+                            
+                            <div class="detail-section">
+                                <h4>🌤️ Best Seasons</h4>
+                                <p>${Array.isArray(details.best_seasons) ? details.best_seasons.join(', ') : 'Year-round'}</p>
+                            </div>
+                            
+                            <div class="detail-section">
+                                <h4>💧 Best Conditions</h4>
+                                <div class="conditions-grid">
+                                    <div class="condition-item">
+                                        <strong>Water Clarity:</strong> ${Array.isArray(details.best_conditions?.water_clarity) ? details.best_conditions.water_clarity.join(', ') : 'Any'}
+                                    </div>
+                                    <div class="condition-item">
+                                        <strong>Water Temperature:</strong> ${details.best_conditions?.water_temperature_f || 'Any'}°F
+                                    </div>
+                                    <div class="condition-item">
+                                        <strong>Depth:</strong> ${details.best_conditions?.depth_ft || 'Any'} ft
+                                    </div>
+                                    <div class="condition-item">
+                                        <strong>Structure/Cover:</strong> ${Array.isArray(details.best_conditions?.structure_cover) ? details.best_conditions.structure_cover.join(', ') : 'Any'}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="detail-section">
+                                <h4>🎣 Retrieve Styles</h4>
+                                <p>${Array.isArray(details.retrieve_styles) ? details.retrieve_styles.join(', ') : 'Standard retrieve'}</p>
+                            </div>
+                            
+                            <div class="detail-section">
+                                <h4>🎨 Recommended Colors</h4>
+                                <div class="colors-grid">
+                                    ${details.recommended_colors ? 
+                                        (typeof details.recommended_colors === 'string' ? 
+                                            `<p>${details.recommended_colors}</p>` :
+                                            Object.entries(details.recommended_colors).map(([condition, colors]) => 
+                                                `<div class="color-condition">
+                                                    <strong>${condition.replace('_', ' ').toUpperCase()}:</strong> ${Array.isArray(colors) ? colors.join(', ') : colors}
+                                                </div>`
+                                            ).join('')
+                                        ) : 'Any natural colors'
+                                    }
+                                </div>
+                            </div>
+                            
+                            <div class="detail-section">
+                                <h4>⚠️ Common Mistakes</h4>
+                                <p>${Array.isArray(details.common_mistakes) ? details.common_mistakes.join('. ') : 'None specified'}</p>
+                            </div>
+                            
+                            <div class="detail-section">
+                                <h4>💡 Pro Tips</h4>
+                                <p>${details.notes || 'No additional tips available'}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Cost Information (for hybrid analysis)
+            if (results.analysis_method === 'Hybrid (ChatGPT + CV)') {
+                html += `
+                    <h3>💰 Analysis Cost</h3>
+                    <div class="notes" style="background: #fff3cd; border-left-color: #ffc107;">
+                        <strong>API Usage:</strong> This analysis used ChatGPT Vision API<br>
+                        <strong>Cost:</strong> Approximately $0.01-0.05 depending on image complexity<br>
+                        <strong>Efficiency:</strong> Image was automatically compressed to optimize costs<br>
+                        <small>💡 Use the "Estimate Cost" button before analysis to see exact costs</small>
                     </div>
                 `;
             }
