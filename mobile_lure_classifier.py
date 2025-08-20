@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """
-Enhanced Hybrid Lure Classifier: ChatGPT Vision + Traditional Computer Vision
-Integrated with the existing lure classification system
+Mobile-Optimized Lure Classifier: ChatGPT Vision + Comprehensive Fishing Database
+Designed for mobile apps with API-first architecture
 """
 
-import cv2
-import numpy as np
 import json
 import os
 import requests
-from typing import Dict, List, Tuple
+from typing import Dict, List
 import base64
 from PIL import Image
-import io
 import datetime
 
-class EnhancedHybridLureClassifier:
+class MobileLureClassifier:
     def __init__(self, openai_api_key: str = None):
         self.openai_api_key = openai_api_key
         self.lure_database = self._initialize_lure_database()
@@ -190,9 +187,9 @@ class EnhancedHybridLureClassifier:
             }
         }
     
-    def analyze_with_chatgpt(self, image_path: str) -> Dict:
+    def analyze_lure(self, image_path: str) -> Dict:
         """
-        Use ChatGPT Vision API to analyze lure image
+        Analyze lure image using ChatGPT Vision API and return comprehensive results
         """
         if not self.openai_api_key:
             return {"error": "OpenAI API key not provided"}
@@ -273,359 +270,50 @@ class EnhancedHybridLureClassifier:
                         content = content.replace('```', '').strip()
                     
                     chatgpt_analysis = json.loads(content)
-                    return {"success": True, "chatgpt_analysis": chatgpt_analysis}
+                    
+                    # Get lure type and confidence
+                    lure_type = chatgpt_analysis.get("lure_type", "Unknown")
+                    confidence = chatgpt_analysis.get("confidence", 0)
+                    
+                    # Get detailed lure information from database
+                    lure_info = self.get_lure_info(lure_type)
+                    
+                    # Store in history
+                    self.analysis_history.append({
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "image_path": image_path,
+                        "lure_type": lure_type,
+                        "confidence": confidence,
+                        "analysis": chatgpt_analysis
+                    })
+                    
+                    # Return comprehensive results
+                    return {
+                        "success": True,
+                        "image_path": image_path,
+                        "lure_type": lure_type,
+                        "confidence": confidence,
+                        "chatgpt_analysis": chatgpt_analysis,
+                        "lure_details": lure_info,
+                        "analysis_method": "ChatGPT Vision API"
+                    }
+                    
                 except json.JSONDecodeError:
                     print(f"⚠️ JSON parsing failed, raw response: {content}")
-                    return {"success": True, "raw_response": content}
+                    return {"error": f"Failed to parse ChatGPT response: {content}"}
             else:
                 return {"error": f"API request failed: {response.status_code} - {response.text}"}
                 
         except Exception as e:
-            return {"error": f"ChatGPT analysis failed: {str(e)}"}
-    
-    def analyze_with_traditional_cv(self, image_path: str) -> Dict:
-        """
-        Traditional computer vision analysis (enhanced version)
-        """
-        try:
-            image = cv2.imread(image_path)
-            if image is None:
-                return {"error": "Could not load image"}
-            
-            # Enhanced CV analysis
-            hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            
-            height, width = image.shape[:2]
-            aspect_ratio = width / height
-            
-            # Color analysis
-            h, s, v = cv2.split(hsv)
-            avg_saturation = np.mean(s)
-            avg_value = np.mean(v)
-            avg_hue = np.mean(h)
-            
-            # Enhanced shape analysis
-            _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            if contours:
-                largest_contour = max(contours, key=cv2.contourArea)
-                area = cv2.contourArea(largest_contour)
-                perimeter = cv2.arcLength(largest_contour, True)
-                circularity = 4 * np.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
-                
-                # Get bounding rectangle
-                x, y, w, h = cv2.boundingRect(largest_contour)
-                rect_aspect = w / h if h > 0 else 0
-                
-                # Edge analysis
-                edges = cv2.Canny(gray, 50, 150)
-                edge_density = np.sum(edges > 0) / (width * height)
-                
-                # Metallic effect detection
-                metallic_score = self._detect_metallic_effect(image, hsv)
-                
-                # Color pattern analysis
-                color_pattern = self._analyze_color_pattern(image, hsv)
-                
-                cv_analysis = {
-                    "aspect_ratio": round(aspect_ratio, 2),
-                    "circularity": round(circularity, 3),
-                    "rectangular_aspect": round(rect_aspect, 2),
-                    "edge_density": round(edge_density, 3),
-                    "avg_saturation": round(avg_saturation, 1),
-                    "avg_value": round(avg_value, 1),
-                    "avg_hue": round(avg_hue, 1),
-                    "metallic_score": round(metallic_score, 3),
-                    "color_pattern": color_pattern
-                }
-            else:
-                cv_analysis = {"error": "No contours detected"}
-            
-            return {"success": True, "cv_analysis": cv_analysis}
-            
-        except Exception as e:
-            return {"error": f"CV analysis failed: {str(e)}"}
-    
-    def _detect_metallic_effect(self, image: np.ndarray, hsv: np.ndarray) -> float:
-        """Detect metallic/shimmering effects in the image"""
-        h, s, v = cv2.split(hsv)
-        s_std = np.std(s)
-        v_std = np.std(v)
-        metallic_score = (s_std + v_std) / 255.0
-        return min(metallic_score, 1.0)
-    
-    def _analyze_color_pattern(self, image: np.ndarray, hsv: np.ndarray) -> str:
-        """Analyze the color pattern of the lure"""
-        h, s, v = cv2.split(hsv)
-        h_hist = cv2.calcHist([h], [0], None, [180], [0, 180])
-        dominant_hue = np.argmax(h_hist)
-        
-        if dominant_hue < 30 or dominant_hue > 150:
-            return "red_blue"
-        elif 30 <= dominant_hue < 90:
-            return "yellow_green"
-        elif 90 <= dominant_hue < 150:
-            return "cyan_blue"
-        else:
-            return "mixed"
-    
-    def hybrid_analysis(self, image_path: str) -> Dict:
-        """
-        Combine ChatGPT and traditional CV analysis
-        """
-        print("🔍 Starting hybrid analysis...")
-        
-        # Compress image for API efficiency
-        compressed_path = self._compress_image_for_api(image_path)
-        
-        try:
-            # Get both analyses using compressed image for ChatGPT
-            chatgpt_result = self.analyze_with_chatgpt(compressed_path)
-            cv_result = self.analyze_with_traditional_cv(image_path)  # Use original for CV
-            
-            # Combine results
-            hybrid_result = {
-                "image_path": image_path,
-                "chatgpt_analysis": chatgpt_result,
-                "traditional_cv": cv_result,
-                "hybrid_decision": self._combine_analyses(chatgpt_result, cv_result)
-            }
-            
-            # Store in history
-            self.analysis_history.append({
-                "timestamp": datetime.datetime.now().isoformat(),
-                "image_path": image_path,
-                "result": hybrid_result
-            })
-            
-            return hybrid_result
-            
+            return {"error": f"Analysis failed: {str(e)}"}
         finally:
             # Clean up compressed image
-            self._cleanup_compressed_image(compressed_path)
-    
-    def _combine_analyses(self, chatgpt_result: Dict, cv_result: Dict) -> Dict:
-        """
-        Intelligently combine both analysis methods with fallback
-        """
-        # If ChatGPT failed, fall back to traditional CV analysis
-        if "error" in chatgpt_result:
-            print(f"⚠️ ChatGPT analysis failed: {chatgpt_result['error']}")
-            print("🔄 Falling back to traditional CV analysis...")
-            
-            # Use traditional CV to classify the lure
-            cv_features = cv_result.get("cv_analysis", {})
-            if "error" not in cv_features:
-                lure_type, confidence = self._classify_with_cv_only(cv_features)
-                lure_info = self.get_lure_info(lure_type)
-                return {
-                    "final_lure_type": lure_type,
-                    "adjusted_confidence": confidence,
-                    "chatgpt_confidence": 0,
-                    "cv_validation_score": confidence,
-                    "reasoning": f"ChatGPT API unavailable. Traditional CV classified as {lure_type} with {confidence}% confidence.",
-                    "fallback_used": True,
-                    "lure_details": lure_info
-                }
-            else:
-                return {"error": "Both analyses failed"}
-        
-        # If CV failed, use ChatGPT only
-        if "error" in cv_result:
-            print(f"⚠️ CV analysis failed: {cv_result['error']}")
-            chatgpt_prediction = chatgpt_result.get("chatgpt_analysis", {})
-            lure_type = chatgpt_prediction.get("lure_type", "Unknown")
-            confidence = chatgpt_prediction.get("confidence", 0)
-            lure_info = self.get_lure_info(lure_type)
-            return {
-                "final_lure_type": lure_type,
-                "adjusted_confidence": confidence,
-                "chatgpt_confidence": confidence,
-                "cv_validation_score": 0,
-                "reasoning": f"CV analysis failed. ChatGPT identified as {lure_type} with {confidence}% confidence.",
-                "fallback_used": True,
-                "lure_details": lure_info
-            }
-        
-        # Both analyses succeeded - combine them
-        chatgpt_prediction = chatgpt_result.get("chatgpt_analysis", {})
-        lure_type = chatgpt_prediction.get("lure_type", "Unknown")
-        confidence = chatgpt_prediction.get("confidence", 0)
-        
-        # Extract CV features
-        cv_features = cv_result.get("cv_analysis", {})
-        
-        # Cross-validate with CV features
-        validation_score = self._validate_with_cv(lure_type, cv_features)
-        
-        # Adjust confidence based on CV validation
-        adjusted_confidence = min(confidence + validation_score, 100)
-        
-        # Get detailed lure information from database
-        lure_info = self.get_lure_info(lure_type)
-        
-        return {
-            "final_lure_type": lure_type,
-            "adjusted_confidence": adjusted_confidence,
-            "chatgpt_confidence": confidence,
-            "cv_validation_score": validation_score,
-            "reasoning": f"ChatGPT identified as {lure_type} with {confidence}% confidence. CV validation added {validation_score} points.",
-            "fallback_used": False,
-            "lure_details": lure_info  # Add comprehensive lure information
-        }
-    
-    def _classify_with_cv_only(self, cv_features: Dict) -> Tuple[str, float]:
-        """
-        Classify lure using only traditional CV features when ChatGPT is unavailable
-        """
-        aspect_ratio = cv_features.get("aspect_ratio", 1.0)
-        circularity = cv_features.get("circularity", 0.0)
-        edge_density = cv_features.get("edge_density", 0.0)
-        metallic_score = cv_features.get("metallic_score", 0.0)
-        
-        # Simple rule-based classification
-        if circularity > 0.7 and 0.8 < aspect_ratio < 1.5:
-            return "Spoon", 85.0
-        elif aspect_ratio > 2.5:
-            return "Jerkbait", 80.0
-        elif 1.5 < aspect_ratio < 2.5 and edge_density > 0.1:
-            return "Spinnerbait", 75.0
-        elif 0.8 < aspect_ratio < 1.5 and edge_density > 0.15:
-            return "Crankbait", 70.0
-        elif 1.0 < aspect_ratio < 2.0:
-            return "Topwater", 65.0
-        else:
-            return "Unknown", 50.0
-    
-    def _validate_with_cv(self, lure_type: str, cv_features: Dict) -> float:
-        """
-        Validate ChatGPT prediction using CV features
-        """
-        if "error" in cv_features:
-            return 0.0
-        
-        score = 0.0
-        aspect_ratio = cv_features.get("aspect_ratio", 1.0)
-        circularity = cv_features.get("circularity", 0.0)
-        edge_density = cv_features.get("edge_density", 0.0)
-        metallic_score = cv_features.get("metallic_score", 0.0)
-        
-        # Enhanced validation based on lure type characteristics
-        if lure_type == "Spinnerbait":
-            if 1.5 < aspect_ratio < 4.0:  # Long and thin
-                score += 10
-            if edge_density > 0.1:  # Lots of edges/details
-                score += 5
-            if metallic_score > 0.3:  # Metallic parts
-                score += 5
-                
-        elif lure_type == "Spoon":
-            if circularity > 0.7:  # Very circular
-                score += 15
-            if 0.8 < aspect_ratio < 1.5:  # Roughly round
-                score += 10
-            if metallic_score > 0.4:  # Very metallic
-                score += 5
-                
-        elif lure_type == "Jerkbait":
-            if aspect_ratio > 3.0:  # Very long and thin
-                score += 15
-                
-        elif lure_type == "Topwater":
-            if 1.0 < aspect_ratio < 2.0:  # Wide and flat
-                score += 10
-                
-        elif lure_type == "Crankbait":
-            if 0.8 < aspect_ratio < 1.5:  # Roughly square-ish
-                score += 10
-            if edge_density > 0.15:  # Lots of edges
-                score += 5
-        
-        elif lure_type == "Soft Plastic Worm":
-            if 1.0 < aspect_ratio < 2.5:  # Moderate aspect ratio
-                score += 8
-            if edge_density > 0.05:  # Some texture/details
-                score += 7
-            if metallic_score < 0.5:  # Not very metallic (soft plastic)
-                score += 5
-            if circularity < 0.8:  # Not perfectly round
-                score += 5
-        
-        elif lure_type == "Creature Bait":
-            if 1.0 < aspect_ratio < 2.5:  # Moderate aspect ratio
-                score += 8
-            if edge_density > 0.05:  # Some texture/details
-                score += 7
-            if metallic_score < 0.5:  # Not very metallic (soft plastic)
-                score += 5
-            if circularity < 0.8:  # Not perfectly round
-                score += 5
-        
-        elif lure_type == "Swimbait":
-            if 1.0 < aspect_ratio < 2.5:  # Moderate aspect ratio
-                score += 8
-            if edge_density > 0.05:  # Some texture/details
-                score += 7
-            if metallic_score < 0.5:  # Not very metallic (soft plastic)
-                score += 5
-            if circularity < 0.8:  # Not perfectly round
-                score += 5
-        
-        elif lure_type == "Crawfish Imitation":
-            if 1.0 < aspect_ratio < 2.5:  # Moderate aspect ratio
-                score += 8
-            if edge_density > 0.05:  # Some texture/details
-                score += 7
-            if metallic_score < 0.5:  # Not very metallic (soft plastic)
-                score += 5
-            if circularity < 0.8:  # Not perfectly round
-                score += 5
-        
-        return score
+            if 'compressed_path' in locals():
+                self._cleanup_compressed_image(compressed_path)
     
     def get_lure_info(self, lure_type: str) -> Dict:
-        """Get comprehensive lure information"""
+        """Get comprehensive lure information from database"""
         return self.lure_database.get(lure_type, {})
-    
-    def generate_training_data(self, image_paths: List[str]) -> Dict:
-        """
-        Generate training data from ChatGPT analysis for model training
-        """
-        training_data = []
-        
-        for image_path in image_paths:
-            print(f"📸 Generating training data for: {image_path}")
-            
-            result = self.analyze_with_chatgpt(image_path)
-            if "success" in result and "chatgpt_analysis" in result:
-                analysis = result["chatgpt_analysis"]
-                
-                training_sample = {
-                    "image_path": image_path,
-                    "label": analysis.get("lure_type", "Unknown"),
-                    "confidence": analysis.get("confidence", 0),
-                    "features": analysis.get("visual_features", []),
-                    "reasoning": analysis.get("reasoning", ""),
-                    "target_species": analysis.get("target_species", [])
-                }
-                
-                training_data.append(training_sample)
-        
-        return {
-            "total_samples": len(training_data),
-            "samples": training_data,
-            "lure_type_distribution": self._get_label_distribution(training_data)
-        }
-    
-    def _get_label_distribution(self, training_data: List[Dict]) -> Dict:
-        """Get distribution of lure types in training data"""
-        distribution = {}
-        for sample in training_data:
-            label = sample["label"]
-            distribution[label] = distribution.get(label, 0) + 1
-        return distribution
     
     def get_analysis_history(self) -> List[Dict]:
         """Get analysis history for monitoring and improvement"""
@@ -634,13 +322,6 @@ class EnhancedHybridLureClassifier:
     def save_analysis_to_json(self, analysis_results: Dict, output_path: str = None) -> str:
         """
         Save analysis results to a JSON file in an organized directory structure
-        
-        Args:
-            analysis_results: Results from hybrid analysis
-            output_path: Optional output file path
-            
-        Returns:
-            Path to saved JSON file
         """
         # Create organized directory structure
         results_dir = "analysis_results"
@@ -655,15 +336,15 @@ class EnhancedHybridLureClassifier:
         # Generate filename with timestamp
         if output_path is None:
             # Extract image name from results if available
-            image_path = analysis_results.get("image_path", "hybrid_analysis")
+            image_path = analysis_results.get("image_path", "analysis")
             if isinstance(image_path, str):
                 base_name = os.path.basename(image_path)
                 base_name = os.path.splitext(base_name)[0]
             else:
-                base_name = "hybrid_analysis"
+                base_name = "analysis"
             
             timestamp = today.strftime("%H-%M-%S")
-            output_path = f"{base_name}_hybrid_{timestamp}_analysis.json"
+            output_path = f"{base_name}_{timestamp}_analysis.json"
         
         # Ensure the filename has .json extension
         if not output_path.endswith('.json'):
@@ -681,13 +362,6 @@ class EnhancedHybridLureClassifier:
     def _compress_image_for_api(self, image_path: str, max_size_kb: int = 500) -> str:
         """
         Compress image for API while preserving important lure details
-        
-        Args:
-            image_path: Path to original image
-            max_size_kb: Target file size in KB (default: 500KB for API efficiency)
-            
-        Returns:
-            Path to compressed image
         """
         try:
             # Ensure uploads directory exists
@@ -776,12 +450,6 @@ class EnhancedHybridLureClassifier:
     def estimate_api_cost(self, image_path: str) -> Dict:
         """
         Estimate API cost and token usage for an image
-        
-        Args:
-            image_path: Path to image file
-            
-        Returns:
-            Dictionary with cost estimates
         """
         try:
             # Compress image to see final size
@@ -812,29 +480,27 @@ class EnhancedHybridLureClassifier:
             return {"error": f"Cost estimation failed: {str(e)}"}
 
 def main():
-    """Example usage of the Enhanced Hybrid Lure Classifier"""
-    print("🎣 Enhanced Hybrid Lure Classifier Demo")
+    """Example usage of the Mobile Lure Classifier"""
+    print("🎣 Mobile Lure Classifier Demo")
     print("=" * 50)
     
     # Initialize classifier (you'll need to add your OpenAI API key)
-    classifier = EnhancedHybridLureClassifier()
+    classifier = MobileLureClassifier()
     
     print("💡 To use ChatGPT Vision API, set your OpenAI API key:")
-    print("   classifier = EnhancedHybridLureClassifier(openai_api_key='your-key-here')")
+    print("   classifier = MobileLureClassifier(openai_api_key='your-key-here')")
     
     print("\n🔍 Available analysis methods:")
-    print("   1. classifier.analyze_with_chatgpt(image_path) - ChatGPT Vision")
-    print("   2. classifier.analyze_with_traditional_cv(image_path) - Traditional CV")
-    print("   3. classifier.hybrid_analysis(image_path) - Combined approach")
-    print("   4. classifier.generate_training_data(image_paths) - Generate training data")
-    print("   5. classifier.get_lure_info(lure_type) - Get lure information")
+    print("   1. classifier.analyze_lure(image_path) - ChatGPT Vision analysis")
+    print("   2. classifier.get_lure_info(lure_type) - Get lure information")
+    print("   3. classifier.estimate_api_cost(image_path) - Cost estimation")
     
-    print("\n🚀 Benefits of enhanced hybrid approach:")
-    print("   - ChatGPT: Natural language understanding of lure features")
-    print("   - Traditional CV: Precise measurements and validation")
-    print("   - Training data generation: Create datasets for custom models")
-    print("   - Continuous improvement: Learn from ChatGPT's analysis")
-    print("   - Analysis history: Track and improve over time")
+    print("\n🚀 Benefits of mobile-optimized approach:")
+    print("   - Lightweight: No heavy CV models")
+    print("   - Fast: API-first architecture")
+    print("   - Accurate: ChatGPT Vision analysis")
+    print("   - Comprehensive: Rich lure database")
+    print("   - Mobile-friendly: Optimized for phones")
 
 if __name__ == "__main__":
     main()

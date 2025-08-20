@@ -775,31 +775,15 @@
                 return;
             }
             
-            // Check what fields are actually available
-            console.log('predicted_lure_type:', results.predicted_lure_type);
-            console.log('confidence:', results.confidence);
-            console.log('feature_analysis:', results.feature_analysis);
-            console.log('analysis_method:', results.analysis_method);
-            
-            // Get the correct lure type and confidence for display
-            let lureType = 'Unknown Lure Type';
-            let confidence = 0;
-            
-            if (results.hybrid_decision) {
-                // Hybrid results
-                lureType = results.hybrid_decision.final_lure_type || 'Unknown Lure Type';
-                confidence = results.hybrid_decision.adjusted_confidence || 0;
-            } else if (results.predicted_lure_type) {
-                // Traditional results
-                lureType = results.predicted_lure_type;
-                confidence = results.confidence || 0;
-            }
+            // Get the lure type and confidence for display
+            let lureType = results.lure_type || 'Unknown Lure Type';
+            let confidence = results.confidence || 0;
             
             let html = `
                 <div class="result-header">
                     <div>
                         <div class="lure-type">${lureType}</div>
-                        <div class="analysis-method">${results.analysis_method || 'Computer Vision Analysis'}</div>
+                        <div class="analysis-method">${results.analysis_method || 'ChatGPT Vision API'}</div>
                     </div>
                     <div class="confidence">
                         ${confidence}%
@@ -809,12 +793,8 @@
             
             console.log('Generated HTML header:', html);
             
-            // Display different results based on classifier type
-            if (selectedClassifier === 'hybrid' && results.hybrid_decision) {
-                html += displayHybridResults(results);
-            } else {
-                html += displayTraditionalResults(results);
-            }
+            // Display ChatGPT analysis results
+            html += displayChatGPTResults(results);
             
             console.log('Final HTML:', html);
             
@@ -836,12 +816,12 @@
             }
         }
         
-        function displayHybridResults(results) {
+        function displayChatGPTResults(results) {
             let html = '';
             
             // ChatGPT Analysis
-            if (results.chatgpt_analysis?.chatgpt_analysis) {
-                const chatgpt = results.chatgpt_analysis.chatgpt_analysis;
+            if (results.chatgpt_analysis) {
+                const chatgpt = results.chatgpt_analysis;
                 html += `
                     <h3>🧠 ChatGPT Analysis</h3>
                     <div class="feature-grid">
@@ -860,265 +840,89 @@
                 `;
             }
             
-            // CV Analysis
-            if (results.traditional_cv?.cv_analysis) {
-                const cv = results.traditional_cv.cv_analysis;
+            // Display detailed lure information if available
+            if (results.lure_details && Object.keys(results.lure_details).length > 0) {
+                const details = results.lure_details;
                 html += `
-                    <h3>🔬 Computer Vision Analysis</h3>
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-title">Aspect Ratio</div>
-                            <div class="feature-value">${cv.aspect_ratio}</div>
+                    <h3>🎣 Lure Information & Fishing Tips</h3>
+                    <div class="lure-details">
+                        <div class="detail-section">
+                            <h4>📖 Description</h4>
+                            <p>${details.description || 'No description available'}</p>
                         </div>
-                        <div class="feature-card">
-                            <div class="feature-title">Circularity</div>
-                            <div class="feature-value">${cv.circularity}</div>
+                        
+                        <div class="detail-section">
+                            <h4>🎯 Target Species</h4>
+                            <p>${Array.isArray(details.target_species) ? details.target_species.join(', ') : 'Unknown'}</p>
                         </div>
-                        <div class="feature-card">
-                            <div class="feature-title">Edge Density</div>
-                            <div class="feature-value">${cv.edge_density}</div>
+                        
+                        <div class="detail-section">
+                            <h4>🌤️ Best Seasons</h4>
+                            <p>${Array.isArray(details.best_seasons) ? details.best_seasons.join(', ') : 'Year-round'}</p>
                         </div>
-                        <div class="feature-card">
-                            <div class="feature-title">Metallic Score</div>
-                            <div class="feature-value">${cv.metallic_score}</div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            // Hybrid Decision
-            if (results.hybrid_decision) {
-                const hybrid = results.hybrid_decision;
-                html += `
-                    <h3>🚀 Hybrid Decision</h3>
-                    <div class="notes">
-                        <strong>Final Result:</strong> ${hybrid.final_lure_type}<br>
-                        <strong>Adjusted Confidence:</strong> ${hybrid.adjusted_confidence}%<br>
-                        <strong>CV Validation Score:</strong> +${hybrid.cv_validation_score} points<br>
-                        <strong>Reasoning:</strong> ${hybrid.reasoning}
-                    </div>
-                `;
-                
-                // Display detailed lure information if available
-                if (hybrid.lure_details && Object.keys(hybrid.lure_details).length > 0) {
-                    const details = hybrid.lure_details;
-                    html += `
-                        <h3>🎣 Lure Information & Fishing Tips</h3>
-                        <div class="lure-details">
-                            <div class="detail-section">
-                                <h4>📖 Description</h4>
-                                <p>${details.description || 'No description available'}</p>
-                            </div>
-                            
-                            <div class="detail-section">
-                                <h4>🎯 Target Species</h4>
-                                <p>${Array.isArray(details.target_species) ? details.target_species.join(', ') : 'Unknown'}</p>
-                            </div>
-                            
-                            <div class="detail-section">
-                                <h4>🌤️ Best Seasons</h4>
-                                <p>${Array.isArray(details.best_seasons) ? details.best_seasons.join(', ') : 'Year-round'}</p>
-                            </div>
-                            
-                            <div class="detail-section">
-                                <h4>💧 Best Conditions</h4>
-                                <div class="conditions-grid">
-                                    <div class="condition-item">
-                                        <strong>Water Clarity:</strong> ${Array.isArray(details.best_conditions?.water_clarity) ? details.best_conditions.water_clarity.join(', ') : 'Any'}
-                                    </div>
-                                    <div class="condition-item">
-                                        <strong>Water Temperature:</strong> ${details.best_conditions?.water_temperature_f || 'Any'}°F
-                                    </div>
-                                    <div class="condition-item">
-                                        <strong>Depth:</strong> ${details.best_conditions?.depth_ft || 'Any'} ft
-                                    </div>
-                                    <div class="condition-item">
-                                        <strong>Structure/Cover:</strong> ${Array.isArray(details.best_conditions?.structure_cover) ? details.best_conditions.structure_cover.join(', ') : 'Any'}
-                                    </div>
+                        
+                        <div class="detail-section">
+                            <h4>💧 Best Conditions</h4>
+                            <div class="conditions-grid">
+                                <div class="condition-item">
+                                    <strong>Water Clarity:</strong> ${Array.isArray(details.best_conditions?.water_clarity) ? details.best_conditions.water_clarity.join(', ') : 'Any'}
+                                </div>
+                                <div class="condition-item">
+                                    <strong>Water Temperature:</strong> ${details.best_conditions?.water_temperature_f || 'Any'}°F
+                                </div>
+                                <div class="condition-item">
+                                    <strong>Depth:</strong> ${details.best_conditions?.depth_ft || 'Any'} ft
+                                </div>
+                                <div class="condition-item">
+                                    <strong>Structure/Cover:</strong> ${Array.isArray(details.best_conditions?.structure_cover) ? details.best_conditions.structure_cover.join(', ') : 'Any'}
                                 </div>
                             </div>
-                            
-                            <div class="detail-section">
-                                <h4>🎣 Retrieve Styles</h4>
-                                <p>${Array.isArray(details.retrieve_styles) ? details.retrieve_styles.join(', ') : 'Standard retrieve'}</p>
-                            </div>
-                            
-                            <div class="detail-section">
-                                <h4>🎨 Recommended Colors</h4>
-                                <div class="colors-grid">
-                                    ${details.recommended_colors ? 
-                                        (typeof details.recommended_colors === 'string' ? 
-                                            `<p>${details.recommended_colors}</p>` :
-                                            Object.entries(details.recommended_colors).map(([condition, colors]) => 
-                                                `<div class="color-condition">
-                                                    <strong>${condition.replace('_', ' ').toUpperCase()}:</strong> ${Array.isArray(colors) ? colors.join(', ') : colors}
-                                                </div>`
-                                            ).join('')
-                                        ) : 'Any natural colors'
-                                    }
-                                </div>
-                            </div>
-                            
-                            <div class="detail-section">
-                                <h4>⚠️ Common Mistakes</h4>
-                                <p>${Array.isArray(details.common_mistakes) ? details.common_mistakes.join('. ') : 'None specified'}</p>
-                            </div>
-                            
-                            <div class="detail-section">
-                                <h4>💡 Pro Tips</h4>
-                                <p>${details.notes || 'No additional tips available'}</p>
+                        </div>
+                        
+                        <div class="detail-section">
+                            <h4>🎣 Retrieve Styles</h4>
+                            <p>${Array.isArray(details.retrieve_styles) ? details.retrieve_styles.join(', ') : 'Standard retrieve'}</p>
+                        </div>
+                        
+                        <div class="detail-section">
+                            <h4>🎨 Recommended Colors</h4>
+                            <div class="colors-grid">
+                                ${details.recommended_colors ? 
+                                    (typeof details.recommended_colors === 'string' ? 
+                                        `<p>${details.recommended_colors}</p>` :
+                                        Object.entries(details.recommended_colors).map(([condition, colors]) => 
+                                            `<div class="color-condition">
+                                                <strong>${condition.replace('_', ' ').toUpperCase()}:</strong> ${Array.isArray(colors) ? colors.join(', ') : colors}
+                                            </div>`
+                                        ).join('')
+                                    ) : 'Any natural colors'
+                                }
                             </div>
                         </div>
-                    `;
-                }
-            }
-            
-            // Cost Information (for hybrid analysis)
-            if (results.analysis_method === 'Hybrid (ChatGPT + CV)') {
-                html += `
-                    <h3>💰 Analysis Cost</h3>
-                    <div class="notes" style="background: #fff3cd; border-left-color: #ffc107;">
-                        <strong>API Usage:</strong> This analysis used ChatGPT Vision API<br>
-                        <strong>Cost:</strong> Approximately $0.01-0.05 depending on image complexity<br>
-                        <strong>Efficiency:</strong> Image was automatically compressed to optimize costs<br>
-                        <small>💡 Use the "Estimate Cost" button before analysis to see exact costs</small>
-                    </div>
-                `;
-            }
-            
-            return html;
-        }
-        
-        function displayTraditionalResults(results) {
-            let html = '';
-            console.log('displayTraditionalResults called with:', results);
-            
-            if (results.feature_analysis) {
-                const features = results.feature_analysis;
-                console.log('Feature analysis:', features);
-                
-                html += `
-                    <h3>🔬 Feature Analysis</h3>
-                    <div class="feature-grid">
-                `;
-                
-                // Display shape features if available
-                if (features.shape_features) {
-                    const shape = features.shape_features;
-                    html += `
-                        <div class="feature-card">
-                            <div class="feature-title">Aspect Ratio</div>
-                            <div class="feature-value">${shape.aspect_ratio || 'N/A'}</div>
+                        
+                        <div class="detail-section">
+                            <h4>⚠️ Common Mistakes</h4>
+                            <p>${Array.isArray(details.common_mistakes) ? details.common_mistakes.join('. ') : 'None specified'}</p>
                         </div>
-                        <div class="feature-card">
-                            <div class="feature-title">Circularity</div>
-                            <div class="feature-value">${shape.circularity || 'N/A'}</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-title">Edge Density</div>
-                            <div class="feature-value">${shape.edge_density || 'N/A'}</div>
-                        </div>
-                    `;
-                }
-                
-                // Display color features if available
-                if (features.color_features) {
-                    const color = features.color_features;
-                    html += `
-                        <div class="feature-card">
-                            <div class="feature-title">Metallic Score</div>
-                            <div class="feature-value">${color.metallic_score || 'N/A'}</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-title">Color Pattern</div>
-                            <div class="feature-value">${color.color_pattern || 'N/A'}</div>
-                        </div>
-                    `;
-                }
-                
-                html += `</div>`;
-                
-                if (features.analysis_notes) {
-                    html += `
-                        <div class="notes">
-                            <strong>Analysis Notes:</strong> ${features.analysis_notes}
-                        </div>
-                    `;
-                }
-            } else {
-                // Fallback display when feature analysis is missing
-                html += `
-                    <h3>🔬 Basic Analysis</h3>
-                    <div class="notes">
-                        <strong>Analysis completed successfully!</strong><br>
-                        The lure has been classified using computer vision techniques.
-                    </div>
-                `;
-            }
-            
-            // Display additional lure information if available
-            if (results.target_species && results.target_species.length > 0) {
-                html += `
-                    <h3>🎯 Target Species</h3>
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-title">Species</div>
-                            <div class="feature-value">${results.target_species.join(', ')}</div>
+                        
+                        <div class="detail-section">
+                            <h4>💡 Pro Tips</h4>
+                            <p>${details.notes || 'No additional tips available'}</p>
                         </div>
                     </div>
                 `;
             }
             
-            if (results.best_seasons && results.best_seasons.length > 0) {
-                html += `
-                    <h3>🌤️ Best Seasons</h3>
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-title">Seasons</div>
-                            <div class="feature-value">${results.best_seasons.join(', ')}</div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            if (results.retrieve_styles && results.retrieve_styles.length > 0) {
-                html += `
-                    <h3>🎣 Retrieve Styles</h3>
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-title">Styles</div>
-                            <div class="feature-value">${results.retrieve_styles.join(', ')}</div>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            if (results.notes) {
-                html += `
-                    <div class="notes">
-                        <strong>General Notes:</strong> ${results.notes}
-                    </div>
-                `;
-            }
-            
-            // Check for any errors in the results
-            if (results.error) {
-                html += `
-                    <div class="error">
-                        <strong>Analysis Error:</strong> ${results.error}
-                    </div>
-                `;
-            }
-            
-            // Show image information if available
-            if (results.image_name) {
-                html += `
-                    <div class="notes">
-                        <strong>Image:</strong> ${results.image_name}
-                        ${results.image_dimensions ? `<br><strong>Dimensions:</strong> ${results.image_dimensions}` : ''}
-                    </div>
-                `;
-            }
+            // Cost Information
+            html += `
+                <h3>💰 Analysis Cost</h3>
+                <div class="notes" style="background: #fff3cd; border-left-color: #ffc107;">
+                    <strong>API Usage:</strong> This analysis used ChatGPT Vision API<br>
+                    <strong>Cost:</strong> Approximately $0.01-0.05 depending on image complexity<br>
+                    <strong>Efficiency:</strong> Image was automatically compressed to optimize costs<br>
+                    <small>💡 Use the "Estimate Cost" button before analysis to see exact costs</small>
+                </div>
+            `;
             
             return html;
         }
@@ -1174,25 +978,32 @@
                 
                 // Test populating with sample data
                 const sampleResult = {
-                    predicted_lure_type: "Test Spinnerbait",
+                    lure_type: "Test Spinnerbait",
                     confidence: 85,
                     analysis_method: "Test Analysis",
-                    feature_analysis: {
-                        shape_features: {
-                            aspect_ratio: 1.5,
-                            circularity: 0.8,
-                            edge_density: 0.6
-                        },
-                        color_features: {
-                            metallic_score: 0.7,
-                            color_pattern: "silver_white"
-                        },
-                        analysis_notes: "This is a test result to verify display functionality."
+                    chatgpt_analysis: {
+                        confidence: 90,
+                        target_species: ["Largemouth Bass", "Smallmouth Bass"],
+                        reasoning: "This is a test result to verify display functionality."
                     },
-                    target_species: ["Largemouth Bass", "Smallmouth Bass"],
-                    best_seasons: ["Spring", "Summer"],
-                    retrieve_styles: ["Steady retrieve", "Stop and go"],
-                    notes: "Test lure for debugging purposes."
+                    lure_details: {
+                        description: "A test lure for debugging purposes.",
+                        target_species: ["Largemouth Bass", "Smallmouth Bass"],
+                        best_seasons: ["Spring", "Summer"],
+                        best_conditions: {
+                            water_clarity: ["Clear", "Murky"],
+                            water_temperature_f: 70,
+                            depth_ft: 10,
+                            structure_cover: ["Reefs", "Woods"]
+                        },
+                        retrieve_styles: ["Steady retrieve", "Stop and go"],
+                        recommended_colors: {
+                            "clear_water": ["Silver", "White"],
+                            "murky_water": ["Black", "Gray"]
+                        },
+                        common_mistakes: ["Over-retrieving", "Not enough action"],
+                        notes: "Test lure for debugging purposes."
+                    }
                 };
                 
                 console.log('Testing with sample data:', sampleResult);
