@@ -1,11 +1,13 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 from werkzeug.utils import secure_filename
 from mobile_lure_classifier import MobileLureClassifier
+import config
+import json
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['UPLOAD_FOLDER'] = config.UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = config.MAX_IMAGE_SIZE_MB * 1024 * 1024
 
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -13,16 +15,16 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Initialize the mobile-optimized lure classifier
 mobile_classifier = None
 
-# Load API key from environment variable
+# Load API key from config file
 def load_api_key():
-    api_key = os.getenv('OPENAI_API_KEY')
+    api_key = config.OPENAI_API_KEY
     if api_key and api_key != 'your_openai_api_key_here':
         global mobile_classifier
         mobile_classifier = MobileLureClassifier(openai_api_key=api_key)
-        print("✅ OpenAI API key loaded successfully")
+        print("✅ OpenAI API key loaded successfully from config.py")
         return True
     else:
-        print("⚠️ OpenAI API key not found. Please set OPENAI_API_KEY environment variable.")
+        print("⚠️ OpenAI API key not found in config.py. Please edit config.py with your actual API key.")
         return False
 
 # Try to load API key on startup
@@ -52,7 +54,7 @@ def upload_file():
             
             # Check if classifier is available
             if not mobile_classifier:
-                return jsonify({'error': 'Lure classifier not initialized. Please set up your API key first.'})
+                return jsonify({'error': 'Lure classifier not initialized. Please set up your API key in config.py first.'})
             
             # Analyze the lure using ChatGPT Vision
             print("🔍 Starting lure analysis...")
@@ -62,7 +64,9 @@ def upload_file():
                 print(f"❌ Analysis failed: {results['error']}")
                 return jsonify({'error': results['error']})
             
-            # Save results to JSON file
+            # Save results to JSON file with image path
+            results['image_path'] = filepath
+            results['image_name'] = filename
             json_file = mobile_classifier.save_analysis_to_json(results)
             results['json_file'] = json_file
             
@@ -75,19 +79,14 @@ def upload_file():
             print(f"❌ Error during analysis: {str(e)}")
             return jsonify({'error': f'Analysis failed: {str(e)}'})
         finally:
-            # Clean up uploaded file
-            try:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-                    print(f"🧹 Cleaned up uploaded file: {filepath}")
-            except Exception as e:
-                print(f"⚠️ Failed to cleanup uploaded file: {str(e)}")
+            # Don't clean up the uploaded file - we want to keep it for the tackle box
+            pass
 
 @app.route('/estimate-cost', methods=['POST'])
 def estimate_cost():
     """Estimate API cost for lure analysis"""
     if not mobile_classifier:
-        return jsonify({'error': 'Lure classifier not initialized. Please set up your API key first.'})
+        return jsonify({'error': 'Lure classifier not initialized. Please set up your API key in config.py first.'})
     
     try:
         if 'file' not in request.files:
@@ -121,23 +120,240 @@ def estimate_cost():
     except Exception as e:
         return jsonify({'error': f'Cost estimation failed: {str(e)}'})
 
-@app.route('/reload-api-key')
-def reload_api_key():
-    """Reload API key from environment (useful for testing)"""
-    success = load_api_key()
-    return jsonify({'success': success, 'message': 'API key reloaded' if success else 'API key not found'})
+@app.route('/reload-config')
+def reload_config():
+    """Reload configuration from config.py (useful for testing)"""
+    try:
+        import importlib
+        importlib.reload(config)
+        success = load_api_key()
+        return jsonify({'success': success, 'message': 'Configuration reloaded' if success else 'API key not found in config.py'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Failed to reload config: {str(e)}'})
+
+@app.route('/tackle-box')
+def tackle_box():
+    """Display all previous lure analysis results"""
+    try:
+        # Get all analysis result files
+        results_dir = config.RESULTS_FOLDER
+        if not os.path.exists(results_dir):
+            return jsonify({'error': 'No analysis results found'})
+        
+        all_results = []
+        
+        # Walk through all subdirectories to find JSON files
+        for root, dirs, files in os.walk(results_dir):
+            for file in files:
+                if file.endswith('_analysis.json'):
+                    file_path = os.path.join(root, file)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            result_data = json.load(f)
+                            
+                        # Extract key information for display
+                        display_data = {
+                            'id': file.replace('_analysis.json', ''),
+                            'filename': result_data.get('image_name', 'Unknown'),
+                            'image_path': result_data.get('image_path', ''), # Add image_path
+                            'lure_type': result_data.get('lure_type', 'Unknown'),
+                            'confidence': result_data.get('confidence', 0),
+                            'analysis_date': result_data.get('analysis_date', 'Unknown'),
+                            'target_species': result_data.get('chatgpt_analysis', {}).get('target_species', []),
+                            'json_file': file_path
+                        }
+                        all_results.append(display_data)
+                    except Exception as e:
+                        print(f"Error reading {file_path}: {e}")
+                        continue
+        
+        # Sort by analysis date (newest first)
+        all_results.sort(key=lambda x: x.get('analysis_date', ''), reverse=True)
+        
+        return render_template('tackle_box.html', results=all_results)
+        
+    except Exception as e:
+        print(f"Error in tackle_box: {e}")
+        return jsonify({'error': f'Failed to load tackle box: {str(e)}'})
+
+@app.route('/api/tackle-box')
+def api_tackle_box():
+    """API endpoint to get tackle box data"""
+    try:
+        # Get all analysis result files
+        results_dir = config.RESULTS_FOLDER
+        if not os.path.exists(results_dir):
+            return jsonify({'results': []})
+        
+        all_results = []
+        
+        # Walk through all subdirectories to find JSON files
+        for root, dirs, files in os.walk(results_dir):
+            for file in files:
+                if file.endswith('_analysis.json'):
+                    file_path = os.path.join(root, file)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            result_data = json.load(f)
+                            
+                        # Extract key information for display
+                        display_data = {
+                            'id': file.replace('_analysis.json', ''),
+                            'filename': result_data.get('image_name', 'Unknown'),
+                            'image_path': result_data.get('image_path', ''), # Add image_path
+                            'lure_type': result_data.get('lure_type', 'Unknown'),
+                            'confidence': result_data.get('confidence', 0),
+                            'analysis_date': result_data.get('analysis_date', 'Unknown'),
+                            'target_species': result_data.get('chatgpt_analysis', {}).get('target_species', []),
+                            'json_file': file_path
+                        }
+                        all_results.append(display_data)
+                    except Exception as e:
+                        print(f"Error reading {file_path}: {e}")
+                        continue
+        
+        # Sort by analysis date (newest first)
+        all_results.sort(key=lambda x: x.get('analysis_date', ''), reverse=True)
+        
+        return jsonify({'results': all_results})
+        
+    except Exception as e:
+        print(f"Error in api_tackle_box: {e}")
+        return jsonify({'error': f'Failed to load tackle box: {str(e)}'})
+
+@app.route('/api/lure-details/<result_id>')
+def get_lure_details(result_id):
+    """Get detailed lure information for a specific result"""
+    try:
+        # Find the result file
+        results_dir = config.RESULTS_FOLDER
+        result_file = None
+        
+        for root, dirs, files in os.walk(results_dir):
+            for file in files:
+                if file.startswith(result_id) and file.endswith('_analysis.json'):
+                    result_file = os.path.join(root, file)
+                    break
+            if result_file:
+                break
+        
+        if not result_file:
+            return jsonify({'error': 'Result not found'})
+        
+        with open(result_file, 'r', encoding='utf-8') as f:
+            result_data = json.load(f)
+        
+        return jsonify(result_data)
+        
+    except Exception as e:
+        print(f"Error getting lure details: {e}")
+        return jsonify({'error': f'Failed to get lure details: {str(e)}'})
+
+@app.route('/api/delete-lure/<result_id>', methods=['DELETE'])
+def delete_lure(result_id):
+    """Delete a lure analysis result from the tackle box"""
+    try:
+        # Find the result file
+        results_dir = config.RESULTS_FOLDER
+        result_file = None
+        
+        for root, dirs, files in os.walk(results_dir):
+            for file in files:
+                if file.startswith(result_id) and file.endswith('_analysis.json'):
+                    result_file = os.path.join(root, file)
+                    break
+            if result_file:
+                break
+        
+        if not result_file:
+            return jsonify({'error': 'Result not found'}), 404
+        
+        # Delete the file
+        os.remove(result_file)
+        print(f"🗑️ Deleted lure analysis: {result_file}")
+        
+        return jsonify({'success': True, 'message': 'Lure deleted successfully'})
+        
+    except Exception as e:
+        print(f"Error deleting lure: {e}")
+        return jsonify({'error': f'Failed to delete lure: {str(e)}'}), 500
+
+@app.route('/api/bulk-delete-lures', methods=['POST'])
+def bulk_delete_lures():
+    """Delete multiple lure analysis results from the tackle box"""
+    try:
+        data = request.get_json()
+        lure_ids = data.get('lure_ids', [])
+        
+        if not lure_ids:
+            return jsonify({'error': 'No lure IDs provided'}), 400
+        
+        deleted_count = 0
+        failed_deletions = []
+        
+        for result_id in lure_ids:
+            try:
+                # Find the result file
+                results_dir = config.RESULTS_FOLDER
+                result_file = None
+                
+                for root, dirs, files in os.walk(results_dir):
+                    for file in files:
+                        if file.startswith(result_id) and file.endswith('_analysis.json'):
+                            result_file = os.path.join(root, file)
+                            break
+                    if result_file:
+                        break
+                
+                if result_file and os.path.exists(result_file):
+                    os.remove(result_file)
+                    deleted_count += 1
+                    print(f"🗑️ Deleted lure analysis: {result_file}")
+                else:
+                    failed_deletions.append(result_id)
+                    
+            except Exception as e:
+                print(f"Error deleting lure {result_id}: {e}")
+                failed_deletions.append(result_id)
+        
+        if deleted_count > 0:
+            message = f"Successfully deleted {deleted_count} lure(s)"
+            if failed_deletions:
+                message += f". Failed to delete {len(failed_deletions)} lure(s)"
+            
+            return jsonify({
+                'success': True, 
+                'message': message,
+                'deleted_count': deleted_count,
+                'failed_count': len(failed_deletions)
+            })
+        else:
+            return jsonify({'error': 'No lures were deleted'}), 400
+        
+    except Exception as e:
+        print(f"Error in bulk delete: {e}")
+        return jsonify({'error': f'Failed to delete lures: {str(e)}'}), 500
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    """Serve uploaded images"""
+    try:
+        return send_from_directory(config.UPLOAD_FOLDER, filename)
+    except Exception as e:
+        print(f"Error serving image {filename}: {e}")
+        return jsonify({'error': 'Image not found'}), 404
 
 if __name__ == '__main__':
     print("🎣 Mobile Lure Classifier Flask App Starting...")
     print("=" * 60)
     
     if mobile_classifier:
-        print("✅ OpenAI API key loaded - Ready for lure analysis!")
+        print("✅ OpenAI API key loaded from config.py - Ready for lure analysis!")
         print("🌐 Server starting on http://localhost:5000")
     else:
         print("⚠️  OpenAI API key not loaded - Analysis will not work")
-        print("💡 Set OPENAI_API_KEY environment variable to enable analysis")
+        print("💡 Edit config.py with your OpenAI API key to enable analysis")
     
     print("=" * 60)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=config.FLASK_DEBUG, host=config.FLASK_HOST, port=config.FLASK_PORT)
 

@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎣 Tackle Box - Mobile Lure Classifier</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .nav-tabs {
+            background: #f8f9fa;
+            padding: 0 30px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .nav-tabs ul {
+            list-style: none;
+            display: flex;
+            margin: 0;
+            padding: 0;
+        }
+
+        .nav-tabs li {
+            margin: 0;
+        }
+
+        .nav-tabs a {
+            display: block;
+            padding: 20px 30px;
+            text-decoration: none;
+            color: #6c757d;
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .nav-tabs a:hover {
+            color: #3498db;
+            background: #e9ecef;
+        }
+
+        .nav-tabs a.active {
+            color: #3498db;
+            border-bottom-color: #3498db;
+            background: white;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .tackle-box-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .filter-select {
+            padding: 12px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+        }
+
+        .lure-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+            margin-top: 30px;
+        }
+
+        .lure-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .lure-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+        }
+
+        .lure-card.selected {
+            border: 3px solid #3498db;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(52, 152, 219, 0.3);
+        }
+
+        .lure-card.selected .lure-card-header {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        }
+
+        .lure-card-header {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .lure-image-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: 0.15;
+            z-index: 1;
+        }
+
+        .lure-card-body {
+            padding: 20px;
+            position: relative;
+            z-index: 2;
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .lure-card-footer {
+            padding: 15px 20px;
+            background: rgba(248, 249, 250, 0.95);
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .lure-type {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .confidence {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            display: inline-block;
+        }
+
+        .lure-info {
+            margin-bottom: 15px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            color: #555;
+            line-height: 1.4;
+        }
+
+        .target-species {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .species-tag {
+            background: #e8f5e8;
+            color: #27ae60;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .lure-card-footer {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .analysis-date {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .view-details-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .view-details-btn:hover {
+            background: #2980b9;
+        }
+
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .bulk-actions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .bulk-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .bulk-info span {
+            font-weight: bold;
+            color: #856404;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-text {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        .empty-subtext {
+            color: #999;
+            margin-bottom: 30px;
+        }
+
+        .home-btn {
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .home-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.8rem;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .lure-details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .lure-image-section {
+            text-align: center;
+        }
+
+        .lure-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .lure-info-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+
+        .detail-item {
+            margin-bottom: 15px;
+        }
+
+        .detail-label {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .detail-value {
+            color: #555;
+            line-height: 1.4;
+        }
+
+        .species-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .species-tag {
+            background: #e8f5e8;
+            color: #27ae60;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .lure-details-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .detail-section h3 {
+            color: #3498db;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+
+        .detail-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+        }
+
+        .detail-section:nth-child(even) {
+            border-left-color: #e74c3c;
+        }
+
+        .detail-section:nth-child(3) {
+            border-left-color: #f39c12;
+        }
+
+        .detail-section:nth-child(4) {
+            border-left-color: #9b59b6;
+        }
+
+        .detail-section .detail-item {
+            margin-bottom: 12px;
+        }
+
+        .detail-section .detail-label {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 4px;
+            font-size: 0.9rem;
+        }
+
+        .detail-section .detail-value {
+            color: #555;
+            line-height: 1.4;
+            font-size: 0.95rem;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+
+        .detail-section .detail-value:empty::before {
+            content: 'No information available';
+            color: #999;
+            font-style: italic;
+        }
+
+        /* Special styling for long text content */
+        .detail-section .detail-value.long-text {
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        /* Color coding for different sections */
+        .detail-section:nth-child(1) h3::before { content: '🎯 '; }
+        .detail-section:nth-child(2) h3::before { content: '🎣 '; }
+        .detail-section:nth-child(3) h3::before { content: '💡 '; }
+        .detail-section:nth-child(4) h3::before { content: '🔍 '; }
+
+        .lure-description-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #e8f4fd 0%, #f0f8ff 100%);
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+        }
+
+        .lure-description-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+
+        .lure-description-section .detail-value {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #34495e;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .lure-description-section .detail-value:empty::before {
+            content: 'No description available for this lure type.';
+            color: #999;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .nav-tabs {
+                padding: 0 20px;
+            }
+            
+            .nav-tabs a {
+                padding: 15px 20px;
+                font-size: 0.9rem;
+            }
+            
+            .tackle-box-header {
+                flex-direction: column;
+                gap: 20px;
+                text-align: center;
+            }
+            
+            .stats {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .search-bar {
+                flex-direction: column;
+            }
+            
+            .lure-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .bulk-info {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+            
+            .lure-card-footer {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+            }
+            
+            .lure-details-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .modal-body {
+                padding: 20px;
+            }
+
+            .lure-details-sections {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎣 Tackle Box</h1>
+            <p>Your Collection of Identified Fishing Lures</p>
+        </div>
+
+        <div class="nav-tabs">
+            <ul>
+                <li><a href="/" class="nav-link">🏠 Home</a></li>
+                <li><a href="/tackle-box" class="nav-link active">🎒 Tackle Box</a></li>
+            </ul>
+        </div>
+
+        <div class="main-content">
+            <div class="tackle-box-header">
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-number" id="total-lures">0</div>
+                        <div class="stat-label">Total Lures</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="unique-types">0</div>
+                        <div class="stat-label">Lure Types</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="avg-confidence">0%</div>
+                        <div class="stat-label">Avg Confidence</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-bar">
+                <input type="text" class="search-input" id="search-input" placeholder="Search lures by name, type, or species...">
+                <select class="filter-select" id="type-filter">
+                    <option value="">All Lure Types</option>
+                </select>
+                <button class="btn btn-secondary" id="bulk-delete-btn" onclick="bulkDelete()" style="display: none;">
+                    🗑️ Delete Selected
+                </button>
+            </div>
+
+            <div class="bulk-actions" id="bulk-actions" style="display: none;">
+                <div class="bulk-info">
+                    <span id="selected-count">0</span> lures selected
+                    <button class="btn btn-secondary" onclick="selectAll()">Select All</button>
+                    <button class="btn btn-secondary" onclick="deselectAll()">Deselect All</button>
+                </div>
+            </div>
+
+            <div id="content-area">
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Loading your tackle box...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="lure-details-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Lure Details</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="lure-details-grid">
+                    <div class="lure-image-section">
+                        <img id="modal-lure-image" class="lure-image" src="" alt="Lure Image">
+                    </div>
+                    <div class="lure-info-section">
+                        <h3>Basic Information</h3>
+                        <div class="detail-item">
+                            <div class="detail-label">Filename:</div>
+                            <div class="detail-value" id="modal-filename"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Lure Type:</div>
+                            <div class="detail-value" id="modal-lure-type"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Confidence:</div>
+                            <div class="detail-value" id="modal-confidence"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Analysis Date:</div>
+                            <div class="detail-value" id="modal-analysis-date"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Target Species:</div>
+                            <div class="species-tags" id="modal-target-species"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="lure-description-section">
+                    <h3>📖 Lure Description</h3>
+                    <div class="detail-value" id="modal-lure-description"></div>
+                </div>
+                
+                <div class="lure-details-sections">
+                    <div class="detail-section">
+                        <h3>🎯 When & How to Use</h3>
+                        <div class="detail-item">
+                            <div class="detail-label">Best Seasons:</div>
+                            <div class="detail-value" id="modal-best-seasons"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Water Conditions:</div>
+                            <div class="detail-value" id="modal-water-conditions"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Depth Range:</div>
+                            <div class="detail-value" id="modal-depth-range"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Structure & Cover:</div>
+                            <div class="detail-value" id="modal-structure-cover"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h3>🎣 Fishing Techniques</h3>
+                        <div class="detail-item">
+                            <div class="detail-label">Retrieve Styles:</div>
+                            <div class="detail-value" id="modal-retrieve-styles"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Recommended Colors:</div>
+                            <div class="detail-value" id="modal-recommended-colors"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h3>💡 Pro Tips & Common Mistakes</h3>
+                        <div class="detail-item">
+                            <div class="detail-label">Pro Tips:</div>
+                            <div class="detail-value" id="modal-pro-tips"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Common Mistakes:</div>
+                            <div class="detail-value" id="modal-common-mistakes"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h3>🔍 AI Analysis</h3>
+                        <div class="detail-item">
+                            <div class="detail-label">Visual Features:</div>
+                            <div class="detail-value" id="modal-visual-features"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">AI Reasoning:</div>
+                            <div class="detail-value" id="modal-ai-reasoning"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allResults = [];
+        let filteredResults = [];
+        let selectedLures = new Set(); // Track selected lures for bulk delete
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTackleBox();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Search functionality
+            document.getElementById('search-input').addEventListener('input', filterResults);
+            
+            // Type filter
+            document.getElementById('type-filter').addEventListener('change', filterResults);
+
+            // Bulk delete functionality
+            document.querySelectorAll('.lure-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    const resultId = this.dataset.id;
+                    toggleSelection(resultId);
+                });
+            });
+
+            document.getElementById('bulk-delete-btn').addEventListener('click', bulkDelete);
+            
+            // Modal click outside to close
+            window.addEventListener('click', function(event) {
+                const modal = document.getElementById('lure-details-modal');
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+        }
+
+        async function loadTackleBox() {
+            try {
+                const response = await fetch('/api/tackle-box');
+                const data = await response.json();
+                
+                if (data.error) {
+                    showEmptyState(data.error);
+                    return;
+                }
+                
+                allResults = data.results || [];
+                filteredResults = [...allResults];
+                
+                updateStats();
+                populateTypeFilter();
+                displayResults();
+                
+            } catch (error) {
+                console.error('Error loading tackle box:', error);
+                showEmptyState('Failed to load tackle box');
+            }
+        }
+
+        function updateStats() {
+            const totalLures = allResults.length;
+            const uniqueTypes = new Set(allResults.map(r => r.lure_type)).size;
+            const avgConfidence = totalLures > 0 ? 
+                Math.round(allResults.reduce((sum, r) => sum + r.confidence, 0) / totalLures) : 0;
+            
+            document.getElementById('total-lures').textContent = totalLures;
+            document.getElementById('unique-types').textContent = uniqueTypes;
+            document.getElementById('avg-confidence').textContent = avgConfidence + '%';
+        }
+
+        function populateTypeFilter() {
+            const typeFilter = document.getElementById('type-filter');
+            const types = [...new Set(allResults.map(r => r.lure_type))].sort();
+            
+            // Clear existing options except the first one
+            typeFilter.innerHTML = '<option value="">All Lure Types</option>';
+            
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                typeFilter.appendChild(option);
+            });
+        }
+
+        function filterResults() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const selectedType = document.getElementById('type-filter').value;
+            
+            filteredResults = allResults.filter(result => {
+                const matchesSearch = 
+                    result.filename.toLowerCase().includes(searchTerm) ||
+                    result.lure_type.toLowerCase().includes(searchTerm) ||
+                    result.target_species.some(species => 
+                        species.toLowerCase().includes(searchTerm)
+                    );
+                
+                const matchesType = !selectedType || result.lure_type === selectedType;
+                
+                return matchesSearch && matchesType;
+            });
+            
+            displayResults();
+        }
+
+        function displayResults() {
+            const contentArea = document.getElementById('content-area');
+            
+            if (filteredResults.length === 0) {
+                if (allResults.length === 0) {
+                    showEmptyState('No lures analyzed yet');
+                } else {
+                    showEmptyState('No lures match your search criteria');
+                }
+                return;
+            }
+            
+            let html = '<div class="lure-grid">';
+            
+            filteredResults.forEach(result => {
+                html += createLureCard(result);
+            });
+            
+            html += '</div>';
+            contentArea.innerHTML = html;
+        }
+
+        function createLureCard(result) {
+            const speciesTags = result.target_species.map(species => 
+                `<span class="species-tag">${species}</span>`
+            ).join('');
+            
+            const isSelected = selectedLures.has(result.id);
+            const selectedClass = isSelected ? 'selected' : '';
+            
+            // Create image background if image_path exists
+            const imageBg = result.image_path ? 
+                `<div class="lure-image-bg" style="background-image: url('/uploads/${result.image_path.split('\\').pop()}')"></div>` : '';
+            
+            return `
+                <div class="lure-card ${selectedClass}" data-id="${result.id}">
+                    ${imageBg}
+                    <div class="lure-card-header">
+                        <div class="lure-type">${result.lure_type}</div>
+                        <div class="confidence">${result.confidence}%</div>
+                    </div>
+                    <div class="lure-card-body">
+                        <div class="lure-info">
+                            <div class="info-label">Filename</div>
+                            <div class="info-value">${result.filename}</div>
+                        </div>
+                        <div class="lure-info">
+                            <div class="detail-label">Target Species</div>
+                            <div class="target-species">${speciesTags}</div>
+                        </div>
+                    </div>
+                    <div class="lure-card-footer">
+                        <div class="analysis-date">${result.analysis_date}</div>
+                        <div class="button-group">
+                            <button class="view-details-btn" onclick="viewLureDetails('${result.id}')">View Details</button>
+                            <button class="delete-btn" onclick="deleteLure('${result.id}')">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function viewLureDetails(resultId) {
+            try {
+                const response = await fetch(`/api/lure-details/${resultId}`);
+                const lureData = await response.json();
+                
+                if (lureData.error) {
+                    alert('Error loading lure details: ' + lureData.error);
+                    return;
+                }
+                
+                // Populate basic information
+                document.getElementById('modal-filename').textContent = lureData.image_name || 'Unknown';
+                document.getElementById('modal-lure-type').textContent = lureData.lure_type || 'Unknown';
+                document.getElementById('modal-confidence').textContent = (lureData.confidence || 0) + '%';
+                document.getElementById('modal-analysis-date').textContent = lureData.analysis_date || 'Unknown';
+                
+                // Set target species
+                const targetSpecies = lureData.chatgpt_analysis?.target_species || [];
+                document.getElementById('modal-target-species').innerHTML = targetSpecies.map(species => 
+                    `<span class="species-tag">${species}</span>`
+                ).join('');
+                
+                // Populate detailed lure information from the database
+                const lureDetails = lureData.lure_details || {};
+                
+                // Set lure description
+                document.getElementById('modal-lure-description').textContent = 
+                    lureDetails.description || 'No description available for this lure type.';
+                
+                // When & How to Use
+                document.getElementById('modal-best-seasons').textContent = 
+                    lureDetails.best_seasons ? lureDetails.best_seasons.join(', ') : 'N/A';
+                
+                const waterConditions = lureDetails.best_conditions?.water_clarity || [];
+                document.getElementById('modal-water-conditions').textContent = 
+                    waterConditions.length > 0 ? waterConditions.join(', ') : 'N/A';
+                
+                const depthRange = lureDetails.best_conditions?.depth_ft || 'N/A';
+                document.getElementById('modal-depth-range').textContent = 
+                    depthRange !== 'N/A' ? `${depthRange} feet` : 'N/A';
+                
+                const structureCover = lureDetails.best_conditions?.structure_cover || [];
+                document.getElementById('modal-structure-cover').textContent = 
+                    structureCover.length > 0 ? structureCover.join(', ') : 'N/A';
+                
+                // Fishing Techniques
+                const retrieveStyles = lureDetails.retrieve_styles || [];
+                document.getElementById('modal-retrieve-styles').textContent = 
+                    retrieveStyles.length > 0 ? retrieveStyles.join(', ') : 'N/A';
+                
+                // Handle recommended colors (can be object or array)
+                let recommendedColors = 'N/A';
+                if (lureDetails.recommended_colors) {
+                    if (Array.isArray(lureDetails.recommended_colors)) {
+                        recommendedColors = lureDetails.recommended_colors.join(', ');
+                    } else if (typeof lureDetails.recommended_colors === 'object') {
+                        const colorList = [];
+                        Object.entries(lureDetails.recommended_colors).forEach(([condition, colors]) => {
+                            if (Array.isArray(colors)) {
+                                colorList.push(`${condition}: ${colors.join(', ')}`);
+                            }
+                        });
+                        recommendedColors = colorList.join(' | ');
+                    }
+                }
+                document.getElementById('modal-recommended-colors').textContent = recommendedColors;
+                
+                // Pro Tips & Common Mistakes
+                document.getElementById('modal-pro-tips').textContent = lureDetails.notes || 'N/A';
+                
+                const commonMistakes = lureDetails.common_mistakes || [];
+                document.getElementById('modal-common-mistakes').textContent = 
+                    commonMistakes.length > 0 ? commonMistakes.join(', ') : 'N/A';
+                
+                // AI Analysis
+                const visualFeatures = lureData.chatgpt_analysis?.visual_features || [];
+                document.getElementById('modal-visual-features').textContent = 
+                    visualFeatures.length > 0 ? visualFeatures.join(', ') : 'N/A';
+                
+                document.getElementById('modal-ai-reasoning').textContent = 
+                    lureData.chatgpt_analysis?.reasoning || 'N/A';
+                
+                // Add long-text class to fields that might have lengthy content
+                const longTextFields = ['modal-pro-tips', 'modal-ai-reasoning', 'modal-recommended-colors'];
+                longTextFields.forEach(fieldId => {
+                    const element = document.getElementById(fieldId);
+                    if (element && element.textContent.length > 100) {
+                        element.classList.add('long-text');
+                    }
+                });
+                
+                // Set image
+                const imagePath = lureData.image_path;
+                if (imagePath) {
+                    const filename = imagePath.split('\\').pop(); // Get filename from Windows path
+                    document.getElementById('modal-lure-image').src = `/uploads/${filename}`;
+                }
+                
+                // Show modal
+                document.getElementById('lure-details-modal').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error loading lure details:', error);
+                alert('Failed to load lure details');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('lure-details-modal').style.display = 'none';
+            document.getElementById('modal-lure-image').parentNode.removeChild(document.querySelector('.lure-image-bg'));
+        }
+
+        async function deleteLure(resultId) {
+            // Prevent event bubbling
+            event.stopPropagation();
+            
+            if (confirm('Are you sure you want to delete this lure from your tackle box?\n\nThis action cannot be undone.')) {
+                try {
+                    const response = await fetch(`/api/delete-lure/${resultId}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        // Remove from both arrays
+                        allResults = allResults.filter(r => r.id !== resultId);
+                        filteredResults = filteredResults.filter(r => r.id !== resultId);
+                        selectedLures.delete(resultId); // Remove from selected set
+                        updateSelectedCount();
+                        
+                        // Update display
+                        updateStats();
+                        displayResults();
+                        
+                        // Show success message
+                        showSuccessMessage('Lure deleted successfully!');
+                    } else {
+                        alert('Failed to delete lure: ' + data.error);
+                    }
+                } catch (error) {
+                    console.error('Error deleting lure:', error);
+                    alert('Failed to delete lure');
+                }
+            }
+        }
+
+        function toggleSelection(resultId) {
+            if (selectedLures.has(resultId)) {
+                selectedLures.delete(resultId);
+            } else {
+                selectedLures.add(resultId);
+            }
+            updateSelectedCount();
+            updateBulkDeleteButtonVisibility();
+        }
+
+        function selectAll() {
+            allResults.forEach(result => {
+                selectedLures.add(result.id);
+            });
+            updateSelectedCount();
+            updateBulkDeleteButtonVisibility();
+        }
+
+        function deselectAll() {
+            selectedLures.clear();
+            updateSelectedCount();
+            updateBulkDeleteButtonVisibility();
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('selected-count').textContent = selectedLures.size;
+        }
+
+        function updateBulkDeleteButtonVisibility() {
+            const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+            const bulkActions = document.getElementById('bulk-actions');
+            if (selectedLures.size > 0) {
+                bulkDeleteBtn.style.display = 'inline-block';
+                bulkActions.style.display = 'block';
+            } else {
+                bulkDeleteBtn.style.display = 'none';
+                bulkActions.style.display = 'none';
+            }
+        }
+
+        async function bulkDelete() {
+            if (selectedLures.size === 0) {
+                alert('No lures selected for deletion.');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete ${selectedLures.size} lure(s) from your tackle box?\n\nThis action cannot be undone.`)) {
+                try {
+                    const resultIds = Array.from(selectedLures);
+                    const response = await fetch('/api/bulk-delete-lures', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ lure_ids: resultIds })
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        // Remove from both arrays
+                        allResults = allResults.filter(r => !resultIds.includes(r.id));
+                        filteredResults = filteredResults.filter(r => !resultIds.includes(r.id));
+                        selectedLures.clear(); // Clear selected set
+                        updateSelectedCount();
+                        
+                        // Update display
+                        updateStats();
+                        displayResults();
+                        
+                        // Show success message
+                        showSuccessMessage('Lures deleted successfully!');
+                    } else {
+                        alert('Failed to delete lures: ' + data.error);
+                    }
+                } catch (error) {
+                    console.error('Error bulk deleting lures:', error);
+                    alert('Failed to delete lures');
+                }
+            }
+        }
+
+        function showSuccessMessage(message) {
+            // Create a temporary success message
+            const successDiv = document.createElement('div');
+            successDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #27ae60;
+                color: white;
+                padding: 15px 25px;
+                border-radius: 10px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                z-index: 1000;
+                font-weight: 600;
+                animation: slideIn 0.3s ease;
+            `;
+            successDiv.textContent = message;
+            
+            // Add animation CSS
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(successDiv);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                successDiv.remove();
+                style.remove();
+            }, 3000);
+        }
+
+        function showEmptyState(message) {
+            const contentArea = document.getElementById('content-area');
+            
+            if (message === 'No lures analyzed yet') {
+                contentArea.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🎣</div>
+                        <div class="empty-text">Your Tackle Box is Empty</div>
+                        <div class="empty-subtext">Start by analyzing some fishing lures to build your collection</div>
+                        <a href="/" class="home-btn">🏠 Go to Home</a>
+                    </div>
+                `;
+            } else {
+                contentArea.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <div class="empty-text">No Results Found</div>
+                        <div class="empty-subtext">${message}</div>
+                        <button onclick="clearFilters()" class="home-btn">Clear Filters</button>
+                    </div>
+                `;
+            }
+        }
+
+        function clearFilters() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('type-filter').value = '';
+            filteredResults = [...allResults];
+            displayResults();
+        }
+    </script>
+</body>
+</html>

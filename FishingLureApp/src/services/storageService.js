@@ -1,0 +1,176 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const TACKLE_BOX_KEY = 'tackle_box_lures';
+
+export const saveLureToTackleBox = async (lureData) => {
+  try {
+    if (__DEV__) {
+      console.log('Saving lure to tackle box:', lureData);
+    }
+    
+    // Get existing tackle box
+    const existingLures = await getTackleBox();
+    
+    // Create new lure entry - merge analysis data directly into the lure object
+    const newLure = {
+      id: Date.now().toString(), // Simple ID generation
+      imageUri: lureData.imageUri,
+      timestamp: lureData.timestamp || new Date().toISOString(),
+      // Spread the analysis data directly into the lure object
+      ...lureData.analysis,
+    };
+    
+    if (__DEV__) {
+      console.log('Created new lure object:', newLure);
+    }
+    
+    // Add to existing lures
+    const updatedLures = [newLure, ...existingLures];
+    
+    if (__DEV__) {
+      console.log('Updated lures array length:', updatedLures.length);
+    }
+    
+    // Save back to storage
+    await AsyncStorage.setItem(TACKLE_BOX_KEY, JSON.stringify(updatedLures));
+    
+    if (__DEV__) {
+      console.log('Successfully saved to AsyncStorage');
+    }
+    
+    return newLure;
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error saving lure to tackle box:', error);
+    }
+    throw new Error('Failed to save lure to tackle box');
+  }
+};
+
+export const getTackleBox = async () => {
+  try {
+    const tackleBoxData = await AsyncStorage.getItem(TACKLE_BOX_KEY);
+    if (__DEV__) {
+      console.log('Raw tackle box data from AsyncStorage:', tackleBoxData);
+    }
+    if (tackleBoxData) {
+      const parsed = JSON.parse(tackleBoxData);
+      if (__DEV__) {
+        console.log('Parsed tackle box data:', parsed);
+        console.log('Number of lures in tackle box:', parsed.length);
+      }
+      return parsed;
+    }
+    if (__DEV__) {
+      console.log('No tackle box data found, returning empty array');
+    }
+    return [];
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error loading tackle box:', error);
+    }
+    return [];
+  }
+};
+
+export const deleteLureFromTackleBox = async (lureId) => {
+  try {
+    const existingLures = await getTackleBox();
+    const updatedLures = existingLures.filter(lure => lure.id !== lureId);
+    
+    await AsyncStorage.setItem(TACKLE_BOX_KEY, JSON.stringify(updatedLures));
+    
+    return true;
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error deleting lure from tackle box:', error);
+    }
+    throw new Error('Failed to delete lure from tackle box');
+  }
+};
+
+export const clearTackleBox = async () => {
+  try {
+    await AsyncStorage.removeItem(TACKLE_BOX_KEY);
+    return true;
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error clearing tackle box:', error);
+    }
+    throw new Error('Failed to clear tackle box');
+  }
+};
+
+export const getLureById = async (lureId) => {
+  try {
+    const tackleBox = await getTackleBox();
+    return tackleBox.find(lure => lure.id === lureId);
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error getting lure by ID:', error);
+    }
+    return null;
+  }
+};
+
+export const updateLureInTackleBox = async (lureId, updatedData) => {
+  try {
+    const existingLures = await getTackleBox();
+    const lureIndex = existingLures.findIndex(lure => lure.id === lureId);
+    
+    if (lureIndex === -1) {
+      throw new Error('Lure not found');
+    }
+    
+    // Update the lure
+    existingLures[lureIndex] = {
+      ...existingLures[lureIndex],
+      ...updatedData,
+      id: lureId, // Ensure ID doesn't change
+    };
+    
+    await AsyncStorage.setItem(TACKLE_BOX_KEY, JSON.stringify(existingLures));
+    
+    return existingLures[lureIndex];
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error updating lure in tackle box:', error);
+    }
+    throw new Error('Failed to update lure in tackle box');
+  }
+};
+
+export const getTackleBoxStats = async () => {
+  try {
+    const tackleBox = await getTackleBox();
+    
+    const stats = {
+      totalLures: tackleBox.length,
+      lureTypes: {},
+      totalConfidence: 0,
+      averageConfidence: 0,
+    };
+    
+    if (tackleBox.length > 0) {
+      tackleBox.forEach(lure => {
+        const lureType = lure.lure_type || 'Unknown';
+        stats.lureTypes[lureType] = (stats.lureTypes[lureType] || 0) + 1;
+        stats.totalConfidence += lure.confidence || 0;
+      });
+      
+      stats.averageConfidence = Math.round(stats.totalConfidence / tackleBox.length);
+    }
+    
+    return stats;
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error getting tackle box stats:', error);
+    }
+    return {
+      totalLures: 0,
+      lureTypes: {},
+      totalConfidence: 0,
+      averageConfidence: 0,
+    };
+  }
+};

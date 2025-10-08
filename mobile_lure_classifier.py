@@ -11,6 +11,7 @@ from typing import Dict, List
 import base64
 from PIL import Image
 import datetime
+import config
 
 class MobileLureClassifier:
     def __init__(self, openai_api_key: str = None):
@@ -212,7 +213,7 @@ class MobileLureClassifier:
             }
             
             payload = {
-                "model": "gpt-4o-mini",
+                "model": config.CHATGPT_MODEL,
                 "messages": [
                     {
                         "role": "user",
@@ -244,7 +245,7 @@ class MobileLureClassifier:
                         ]
                     }
                 ],
-                "max_tokens": 500
+                "max_tokens": config.MAX_TOKENS
             }
             
             print("🚀 Sending request to ChatGPT Vision API...")
@@ -295,7 +296,8 @@ class MobileLureClassifier:
                         "confidence": confidence,
                         "chatgpt_analysis": chatgpt_analysis,
                         "lure_details": lure_info,
-                        "analysis_method": "ChatGPT Vision API"
+                        "analysis_method": "ChatGPT Vision API",
+                        "analysis_date": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     }
                     
                 except json.JSONDecodeError:
@@ -324,7 +326,7 @@ class MobileLureClassifier:
         Save analysis results to a JSON file in an organized directory structure
         """
         # Create organized directory structure
-        results_dir = "analysis_results"
+        results_dir = config.RESULTS_FOLDER
         os.makedirs(results_dir, exist_ok=True)
         
         # Create subdirectories by date
@@ -359,13 +361,16 @@ class MobileLureClassifier:
         
         return full_output_path
 
-    def _compress_image_for_api(self, image_path: str, max_size_kb: int = 500) -> str:
+    def _compress_image_for_api(self, image_path: str, max_size_kb: int = None) -> str:
         """
         Compress image for API while preserving important lure details
         """
+        if max_size_kb is None:
+            max_size_kb = config.TARGET_COMPRESSION_KB
+            
         try:
             # Ensure uploads directory exists
-            os.makedirs("uploads", exist_ok=True)
+            os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
             
             # Open image with PIL
             with Image.open(image_path) as img:
@@ -379,7 +384,7 @@ class MobileLureClassifier:
                 
                 # Calculate target dimensions (maintain aspect ratio)
                 # ChatGPT works well with images around 800-1200px on longest side
-                max_dimension = 1200
+                max_dimension = config.MAX_IMAGE_DIMENSION
                 new_width, new_height = original_width, original_height
                 
                 if original_width > max_dimension or original_height > max_dimension:
@@ -396,7 +401,7 @@ class MobileLureClassifier:
                 
                 # Create compressed version path
                 base_name = os.path.splitext(os.path.basename(image_path))[0]
-                compressed_path = f"uploads/compressed_{base_name}.jpg"
+                compressed_path = f"{config.UPLOAD_FOLDER}/compressed_{base_name}.jpg"
                 
                 # Save with quality optimization
                 quality = 95
@@ -487,8 +492,8 @@ def main():
     # Initialize classifier (you'll need to add your OpenAI API key)
     classifier = MobileLureClassifier()
     
-    print("💡 To use ChatGPT Vision API, set your OpenAI API key:")
-    print("   classifier = MobileLureClassifier(openai_api_key='your-key-here')")
+    print("💡 To use ChatGPT Vision API, set your OpenAI API key in config.py:")
+    print("   OPENAI_API_KEY = 'your-actual-api-key-here'")
     
     print("\n🔍 Available analysis methods:")
     print("   1. classifier.analyze_lure(image_path) - ChatGPT Vision analysis")
