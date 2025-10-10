@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,114 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Modal,
+  TextInput,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { addCatchToLure, deleteCatchFromLure } from '../services/storageService';
 
 export default function LureDetailScreen({ route, navigation }) {
   const { lure } = route.params;
+  const [addCatchModalVisible, setAddCatchModalVisible] = useState(false);
+  const [viewCatchModalVisible, setViewCatchModalVisible] = useState(false);
+  const [selectedCatch, setSelectedCatch] = useState(null);
+  const [catchPhoto, setCatchPhoto] = useState(null);
+  const [catchDetails, setCatchDetails] = useState({
+    fishSpecies: '',
+    weight: '',
+    length: '',
+    location: '',
+    notes: '',
+  });
+
+  const pickCatchPhoto = async (useCamera = false) => {
+    try {
+      let result;
+      
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission needed', 'Camera permission is required to take photos');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled) {
+        setCatchPhoto(result.assets[0]);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick photo');
+    }
+  };
+
+  const saveCatch = async () => {
+    if (!catchPhoto) {
+      Alert.alert('No Photo', 'Please add a photo of your catch');
+      return;
+    }
+
+    try {
+      await addCatchToLure(lure.id, {
+        imageUri: catchPhoto.uri,
+        ...catchDetails,
+      });
+      
+      Alert.alert('Success', 'Catch added successfully!');
+      setAddCatchModalVisible(false);
+      setCatchPhoto(null);
+      setCatchDetails({
+        fishSpecies: '',
+        weight: '',
+        length: '',
+        location: '',
+        notes: '',
+      });
+      
+      // Refresh the screen
+      navigation.setParams({ lure: { ...lure, catchCount: (lure.catchCount || 0) + 1 } });
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save catch');
+    }
+  };
+
+  const handleDeleteCatch = async (catchId) => {
+    Alert.alert(
+      'Delete Catch',
+      'Are you sure you want to delete this catch?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteCatchFromLure(lure.id, catchId);
+              Alert.alert('Success', 'Catch deleted');
+              setViewCatchModalVisible(false);
+              navigation.setParams({ lure: { ...lure, catchCount: (lure.catchCount || 1) - 1 } });
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete catch');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleDelete = () => {
     Alert.alert(
@@ -187,6 +290,47 @@ export default function LureDetailScreen({ route, navigation }) {
         'analytics'
       )}
 
+      {/* Catches Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="fish" size={20} color="#2c3e50" />
+          <Text style={styles.sectionTitle}>My Catches ({lure.catches?.length || 0})</Text>
+        </View>
+        
+        {lure.catches && lure.catches.length > 0 ? (
+          <FlatList
+            data={lure.catches}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.catchThumbnail}
+                onPress={() => {
+                  setSelectedCatch(item);
+                  setViewCatchModalVisible(true);
+                }}
+              >
+                <Image source={{ uri: item.imageUri }} style={styles.catchImage} />
+                <Text style={styles.catchDate}>
+                  {new Date(item.timestamp).toLocaleDateString()}
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+        ) : (
+          <Text style={styles.noCatchesText}>No catches recorded yet. Add your first catch!</Text>
+        )}
+        
+        <TouchableOpacity
+          style={styles.addCatchButton}
+          onPress={() => setAddCatchModalVisible(true)}
+        >
+          <Ionicons name="add-circle" size={24} color="white" />
+          <Text style={styles.addCatchButtonText}>Add Catch Photo</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
         <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
@@ -196,6 +340,170 @@ export default function LureDetailScreen({ route, navigation }) {
       </View>
 
       <View style={styles.bottomSpacer} />
+
+      {/* Add Catch Modal */}
+      <Modal
+        visible={addCatchModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>📸 Add Catch</Text>
+            <TouchableOpacity onPress={() => setAddCatchModalVisible(false)}>
+              <Ionicons name="close" size={24} color="#2c3e50" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {/* Photo Picker */}
+            <View style={styles.photoSection}>
+              {catchPhoto ? (
+                <Image source={{ uri: catchPhoto.uri }} style={styles.catchPhotoPreview} />
+              ) : (
+                <View style={styles.photoPlaceholder}>
+                  <Ionicons name="camera" size={48} color="#95a5a6" />
+                  <Text style={styles.photoPlaceholderText}>Add a photo of your catch</Text>
+                </View>
+              )}
+              
+              <View style={styles.photoButtons}>
+                <TouchableOpacity
+                  style={styles.photoButton}
+                  onPress={() => pickCatchPhoto(true)}
+                >
+                  <Ionicons name="camera" size={20} color="white" />
+                  <Text style={styles.photoButtonText}>Take Photo</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.photoButton}
+                  onPress={() => pickCatchPhoto(false)}
+                >
+                  <Ionicons name="images" size={20} color="white" />
+                  <Text style={styles.photoButtonText}>Choose Photo</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Catch Details Form */}
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Fish Species</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="e.g., Largemouth Bass"
+                value={catchDetails.fishSpecies}
+                onChangeText={(text) => setCatchDetails({...catchDetails, fishSpecies: text})}
+              />
+
+              <Text style={styles.formLabel}>Weight</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="e.g., 3.5 lbs"
+                value={catchDetails.weight}
+                onChangeText={(text) => setCatchDetails({...catchDetails, weight: text})}
+              />
+
+              <Text style={styles.formLabel}>Length</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="e.g., 18 inches"
+                value={catchDetails.length}
+                onChangeText={(text) => setCatchDetails({...catchDetails, length: text})}
+              />
+
+              <Text style={styles.formLabel}>Location</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="e.g., Lake Michigan"
+                value={catchDetails.location}
+                onChangeText={(text) => setCatchDetails({...catchDetails, location: text})}
+              />
+
+              <Text style={styles.formLabel}>Notes</Text>
+              <TextInput
+                style={[styles.formInput, styles.formTextArea]}
+                placeholder="Add any notes about this catch..."
+                value={catchDetails.notes}
+                onChangeText={(text) => setCatchDetails({...catchDetails, notes: text})}
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setAddCatchModalVisible(false)}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={saveCatch}
+            >
+              <Text style={styles.saveButtonText}>Save Catch</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* View Catch Modal */}
+      <Modal
+        visible={viewCatchModalVisible}
+        animationType="fade"
+        transparent={true}
+      >
+        <View style={styles.catchViewModal}>
+          <TouchableOpacity
+            style={styles.catchViewBackdrop}
+            onPress={() => setViewCatchModalVisible(false)}
+          />
+          {selectedCatch && (
+            <View style={styles.catchViewContainer}>
+              <Image source={{ uri: selectedCatch.imageUri }} style={styles.catchViewImage} />
+              
+              <View style={styles.catchViewDetails}>
+                {selectedCatch.fishSpecies && (
+                  <Text style={styles.catchViewText}>🐟 {selectedCatch.fishSpecies}</Text>
+                )}
+                {selectedCatch.weight && (
+                  <Text style={styles.catchViewText}>⚖️ {selectedCatch.weight}</Text>
+                )}
+                {selectedCatch.length && (
+                  <Text style={styles.catchViewText}>📏 {selectedCatch.length}</Text>
+                )}
+                {selectedCatch.location && (
+                  <Text style={styles.catchViewText}>📍 {selectedCatch.location}</Text>
+                )}
+                {selectedCatch.notes && (
+                  <Text style={styles.catchViewText}>📝 {selectedCatch.notes}</Text>
+                )}
+                <Text style={styles.catchViewDate}>
+                  {new Date(selectedCatch.timestamp).toLocaleDateString()}
+                </Text>
+              </View>
+
+              <View style={styles.catchViewActions}>
+                <TouchableOpacity
+                  style={styles.catchDeleteButton}
+                  onPress={() => handleDeleteCatch(selectedCatch.id)}
+                >
+                  <Ionicons name="trash" size={20} color="white" />
+                  <Text style={styles.catchDeleteButtonText}>Delete</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.catchCloseButton}
+                  onPress={() => setViewCatchModalVisible(false)}
+                >
+                  <Text style={styles.catchCloseButtonText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -323,5 +631,229 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 50,
+  },
+  catchThumbnail: {
+    marginRight: 15,
+    alignItems: 'center',
+  },
+  catchImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 10,
+    marginBottom: 5,
+  },
+  catchDate: {
+    fontSize: 12,
+    color: '#7f8c8d',
+  },
+  noCatchesText: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    fontStyle: 'italic',
+    marginBottom: 15,
+  },
+  addCatchButton: {
+    backgroundColor: '#27ae60',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 15,
+  },
+  addCatchButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  photoSection: {
+    marginBottom: 20,
+  },
+  catchPhotoPreview: {
+    width: '100%',
+    height: 250,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  photoPlaceholder: {
+    width: '100%',
+    height: 250,
+    backgroundColor: '#ecf0f1',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  photoPlaceholderText: {
+    fontSize: 16,
+    color: '#95a5a6',
+    marginTop: 10,
+  },
+  photoButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  photoButton: {
+    flex: 1,
+    backgroundColor: '#3498db',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 10,
+    marginHorizontal: 5,
+  },
+  photoButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  formSection: {
+    marginBottom: 20,
+  },
+  formLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 8,
+    marginTop: 15,
+  },
+  formInput: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    color: '#2c3e50',
+  },
+  formTextArea: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#ecf0f1',
+    padding: 15,
+    borderRadius: 10,
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: '#27ae60',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  catchViewModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  catchViewBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  catchViewContainer: {
+    width: '90%',
+    backgroundColor: 'white',
+    borderRadius: 15,
+    overflow: 'hidden',
+  },
+  catchViewImage: {
+    width: '100%',
+    height: 300,
+  },
+  catchViewDetails: {
+    padding: 20,
+  },
+  catchViewText: {
+    fontSize: 16,
+    color: '#2c3e50',
+    marginBottom: 8,
+  },
+  catchViewDate: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginTop: 10,
+  },
+  catchViewActions: {
+    flexDirection: 'row',
+    padding: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+  },
+  catchDeleteButton: {
+    flex: 1,
+    backgroundColor: '#e74c3c',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 10,
+    marginRight: 10,
+  },
+  catchDeleteButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 5,
+  },
+  catchCloseButton: {
+    flex: 1,
+    backgroundColor: '#95a5a6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 10,
+  },
+  catchCloseButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

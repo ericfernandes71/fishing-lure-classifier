@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { getTackleBox, deleteLureFromTackleBox } from '../services/storageService';
+import { getTackleBox, deleteLureFromTackleBox, toggleFavorite } from '../services/storageService';
 
 export default function TackleBoxScreen({ navigation }) {
   const [lures, setLures] = useState([]);
@@ -26,6 +26,7 @@ export default function TackleBoxScreen({ navigation }) {
     lureType: '',
     targetSpecies: '',
     confidence: '',
+    showFavoritesOnly: false,
   });
 
   const loadTackleBox = async () => {
@@ -50,6 +51,11 @@ export default function TackleBoxScreen({ navigation }) {
 
   const applyFilters = () => {
     let filtered = lures;
+
+    // Favorites filter
+    if (selectedFilters.showFavoritesOnly) {
+      filtered = filtered.filter(lure => lure.isFavorite === true);
+    }
 
     // Search filter
     if (searchQuery.trim()) {
@@ -100,8 +106,21 @@ export default function TackleBoxScreen({ navigation }) {
       lureType: '',
       targetSpecies: '',
       confidence: '',
+      showFavoritesOnly: false,
     });
     setFilteredLures(lures);
+  };
+
+  const handleToggleFavorite = async (lureId) => {
+    try {
+      await toggleFavorite(lureId);
+      await loadTackleBox();
+    } catch (error) {
+      if (__DEV__) {
+        console.error('Error toggling favorite:', error);
+      }
+      Alert.alert('Error', 'Failed to update favorite status');
+    }
   };
 
   const getUniqueValues = (key, subKey) => {
@@ -178,7 +197,22 @@ export default function TackleBoxScreen({ navigation }) {
         <Image source={{ uri: item.imageUri }} style={styles.lureImage} />
       )}
       <View style={styles.lureInfo}>
-        <Text style={styles.lureType}>{item.lure_type || 'Unknown Lure'}</Text>
+        <View style={styles.lureHeader}>
+          <Text style={styles.lureType}>{item.lure_type || 'Unknown Lure'}</Text>
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              handleToggleFavorite(item.id);
+            }}
+            style={styles.favoriteButton}
+          >
+            <Ionicons 
+              name={item.isFavorite ? "heart" : "heart-outline"} 
+              size={24} 
+              color={item.isFavorite ? "#e74c3c" : "#95a5a6"} 
+            />
+          </TouchableOpacity>
+        </View>
         <Text style={styles.confidence}>
           Confidence: {item.confidence || item.chatgpt_analysis?.confidence || 'N/A'}%
         </Text>
@@ -186,13 +220,22 @@ export default function TackleBoxScreen({ navigation }) {
           Target: {item.lure_details?.target_species?.join(', ') || 
                    item.chatgpt_analysis?.target_species?.join(', ') || 'Various'}
         </Text>
+        {item.catchCount > 0 && (
+          <View style={styles.catchBadge}>
+            <Ionicons name="fish" size={16} color="#27ae60" />
+            <Text style={styles.catchCount}>{item.catchCount} catch{item.catchCount !== 1 ? 'es' : ''}</Text>
+          </View>
+        )}
         <Text style={styles.timestamp}>
           {new Date(item.analysis_date || Date.now()).toLocaleDateString()}
         </Text>
       </View>
       <TouchableOpacity
         style={styles.deleteButton}
-        onPress={() => deleteLure(item.id)}
+        onPress={(e) => {
+          e.stopPropagation();
+          deleteLure(item.id);
+        }}
       >
         <Ionicons name="trash" size={20} color="white" />
       </TouchableOpacity>
@@ -217,6 +260,32 @@ export default function TackleBoxScreen({ navigation }) {
         </View>
 
         <ScrollView style={styles.modalContent}>
+          {/* Favorites Filter */}
+          <View style={styles.filterSection}>
+            <TouchableOpacity
+              style={[
+                styles.favoritesToggle,
+                selectedFilters.showFavoritesOnly && styles.favoritesToggleActive
+              ]}
+              onPress={() => setSelectedFilters({
+                ...selectedFilters,
+                showFavoritesOnly: !selectedFilters.showFavoritesOnly
+              })}
+            >
+              <Ionicons 
+                name={selectedFilters.showFavoritesOnly ? "heart" : "heart-outline"} 
+                size={24} 
+                color={selectedFilters.showFavoritesOnly ? "#e74c3c" : "#2c3e50"} 
+              />
+              <Text style={[
+                styles.favoritesToggleText,
+                selectedFilters.showFavoritesOnly && styles.favoritesToggleTextActive
+              ]}>
+                Show Favorites Only
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Search */}
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>🔎 Search</Text>
@@ -468,11 +537,36 @@ const styles = StyleSheet.create({
   lureInfo: {
     flex: 1,
   },
+  lureHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   lureType: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#2c3e50',
-    marginBottom: 4,
+    flex: 1,
+  },
+  favoriteButton: {
+    padding: 4,
+  },
+  catchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#d5f4e6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  catchCount: {
+    fontSize: 14,
+    color: '#27ae60',
+    fontWeight: '600',
+    marginLeft: 4,
   },
   confidence: {
     fontSize: 14,
@@ -593,5 +687,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: 'white',
+  },
+  favoritesToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecf0f1',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  favoritesToggleActive: {
+    backgroundColor: '#ffe5e5',
+    borderColor: '#e74c3c',
+  },
+  favoritesToggleText: {
+    fontSize: 16,
+    color: '#2c3e50',
+    marginLeft: 10,
+    fontWeight: '600',
+  },
+  favoritesToggleTextActive: {
+    color: '#e74c3c',
   },
 });

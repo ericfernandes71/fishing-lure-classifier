@@ -16,6 +16,9 @@ export const saveLureToTackleBox = async (lureData) => {
       id: Date.now().toString(), // Simple ID generation
       imageUri: lureData.imageUri,
       timestamp: lureData.timestamp || new Date().toISOString(),
+      isFavorite: false, // New: favorite status
+      catches: [], // New: array of catch photos
+      catchCount: 0, // New: total catches
       // Spread the analysis data directly into the lure object
       ...lureData.analysis,
     };
@@ -140,15 +143,112 @@ export const updateLureInTackleBox = async (lureId, updatedData) => {
   }
 };
 
+// Toggle favorite status
+export const toggleFavorite = async (lureId) => {
+  try {
+    const existingLures = await getTackleBox();
+    const lureIndex = existingLures.findIndex(lure => lure.id === lureId);
+    
+    if (lureIndex === -1) {
+      throw new Error('Lure not found');
+    }
+    
+    // Toggle favorite status
+    existingLures[lureIndex].isFavorite = !existingLures[lureIndex].isFavorite;
+    
+    await AsyncStorage.setItem(TACKLE_BOX_KEY, JSON.stringify(existingLures));
+    
+    return existingLures[lureIndex];
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error toggling favorite:', error);
+    }
+    throw new Error('Failed to toggle favorite');
+  }
+};
+
+// Add catch photo to a lure
+export const addCatchToLure = async (lureId, catchData) => {
+  try {
+    const existingLures = await getTackleBox();
+    const lureIndex = existingLures.findIndex(lure => lure.id === lureId);
+    
+    if (lureIndex === -1) {
+      throw new Error('Lure not found');
+    }
+    
+    const newCatch = {
+      id: Date.now().toString(),
+      imageUri: catchData.imageUri,
+      timestamp: catchData.timestamp || new Date().toISOString(),
+      notes: catchData.notes || '',
+      location: catchData.location || '',
+      fishSpecies: catchData.fishSpecies || '',
+      weight: catchData.weight || '',
+      length: catchData.length || '',
+    };
+    
+    // Add catch to array
+    if (!existingLures[lureIndex].catches) {
+      existingLures[lureIndex].catches = [];
+    }
+    existingLures[lureIndex].catches.unshift(newCatch);
+    
+    // Update catch count
+    existingLures[lureIndex].catchCount = existingLures[lureIndex].catches.length;
+    
+    await AsyncStorage.setItem(TACKLE_BOX_KEY, JSON.stringify(existingLures));
+    
+    return existingLures[lureIndex];
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error adding catch:', error);
+    }
+    throw new Error('Failed to add catch');
+  }
+};
+
+// Delete catch from a lure
+export const deleteCatchFromLure = async (lureId, catchId) => {
+  try {
+    const existingLures = await getTackleBox();
+    const lureIndex = existingLures.findIndex(lure => lure.id === lureId);
+    
+    if (lureIndex === -1) {
+      throw new Error('Lure not found');
+    }
+    
+    // Remove catch from array
+    existingLures[lureIndex].catches = existingLures[lureIndex].catches.filter(
+      catch_ => catch_.id !== catchId
+    );
+    
+    // Update catch count
+    existingLures[lureIndex].catchCount = existingLures[lureIndex].catches.length;
+    
+    await AsyncStorage.setItem(TACKLE_BOX_KEY, JSON.stringify(existingLures));
+    
+    return existingLures[lureIndex];
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error deleting catch:', error);
+    }
+    throw new Error('Failed to delete catch');
+  }
+};
+
 export const getTackleBoxStats = async () => {
   try {
     const tackleBox = await getTackleBox();
     
     const stats = {
       totalLures: tackleBox.length,
+      favoriteLures: tackleBox.filter(lure => lure.isFavorite).length,
+      totalCatches: tackleBox.reduce((sum, lure) => sum + (lure.catchCount || 0), 0),
       lureTypes: {},
       totalConfidence: 0,
       averageConfidence: 0,
+      bestPerformingLures: [],
     };
     
     if (tackleBox.length > 0) {
@@ -159,6 +259,17 @@ export const getTackleBoxStats = async () => {
       });
       
       stats.averageConfidence = Math.round(stats.totalConfidence / tackleBox.length);
+      
+      // Get top 5 best performing lures by catch count
+      stats.bestPerformingLures = tackleBox
+        .filter(lure => lure.catchCount > 0)
+        .sort((a, b) => b.catchCount - a.catchCount)
+        .slice(0, 5)
+        .map(lure => ({
+          id: lure.id,
+          lure_type: lure.lure_type,
+          catchCount: lure.catchCount,
+        }));
     }
     
     return stats;
@@ -168,9 +279,12 @@ export const getTackleBoxStats = async () => {
     }
     return {
       totalLures: 0,
+      favoriteLures: 0,
+      totalCatches: 0,
       lureTypes: {},
       totalConfidence: 0,
       averageConfidence: 0,
+      bestPerformingLures: [],
     };
   }
 };
