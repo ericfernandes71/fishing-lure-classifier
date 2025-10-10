@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera } from 'expo-camera';
+import { Ionicons } from '@expo/vector-icons';
 import { analyzeLure } from '../services/lureAnalysisService';
 import { saveLureToTackleBox } from '../services/storageService';
 
@@ -176,6 +177,15 @@ export default function HomeScreen() {
               </Text>
             </View>
           )}
+
+          {/* Scan Next Lure Button */}
+          <TouchableOpacity 
+            style={styles.scanNextButton} 
+            onPress={resetSelection}
+          >
+            <Ionicons name="camera" size={24} color="white" />
+            <Text style={styles.scanNextButtonText}>📸 Scan Next Lure</Text>
+          </TouchableOpacity>
         </View>
       )}
     </ScrollView>
@@ -306,5 +316,25 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontWeight: 'bold',
+  },
+  scanNextButton: {
+    backgroundColor: '#3498db',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  scanNextButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });
