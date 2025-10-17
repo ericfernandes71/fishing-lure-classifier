@@ -206,14 +206,18 @@ export default function TackleBoxScreen({ navigation }) {
     applyFilters();
   }, [searchQuery, selectedFilters, lures]);
 
-  const renderLureItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.lureCard}
-      onPress={() => navigation.navigate('LureDetail', { lure: item })}
-    >
-      {item.imageUri && (
-        <Image source={{ uri: item.imageUri }} style={styles.lureImage} />
-      )}
+  const renderLureItem = ({ item }) => {
+    // Get lure image URL (supports both local and Supabase formats)
+    const imageUri = item.image_url || item.imageUri || item.image_path;
+    
+    return (
+      <TouchableOpacity 
+        style={styles.lureCard}
+        onPress={() => navigation.navigate('LureDetail', { lure: item })}
+      >
+        {imageUri && (
+          <Image source={{ uri: imageUri }} style={styles.lureImage} />
+        )}
       <View style={styles.lureInfo}>
         <View style={styles.lureHeader}>
           <Text style={styles.lureType}>{item.lure_type || 'Unknown Lure'}</Text>
@@ -258,7 +262,8 @@ export default function TackleBoxScreen({ navigation }) {
         <Ionicons name="trash" size={20} color="white" />
       </TouchableOpacity>
     </TouchableOpacity>
-  );
+    );
+  };
 
   const renderFilterModal = () => (
     <Modal

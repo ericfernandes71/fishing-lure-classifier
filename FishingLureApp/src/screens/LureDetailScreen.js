@@ -69,8 +69,12 @@ export default function LureDetailScreen({ route, navigation }) {
     }
 
     try {
-      await addCatchToLure(lure.id, {
+      // Use the lure's ID - could be local timestamp or Supabase UUID
+      const lureIdentifier = lure.id || lure.timestamp || Date.now().toString();
+      
+      await addCatchToLure(lureIdentifier, {
         imageUri: catchPhoto.uri,
+        timestamp: new Date().toISOString(),
         ...catchDetails,
       });
       
@@ -88,7 +92,8 @@ export default function LureDetailScreen({ route, navigation }) {
       // Refresh the screen
       navigation.setParams({ lure: { ...lure, catchCount: (lure.catchCount || 0) + 1 } });
     } catch (error) {
-      Alert.alert('Error', 'Failed to save catch');
+      console.error('[LureDetail] Save catch error:', error);
+      Alert.alert('Error', `Failed to save catch: ${error.message}`);
     }
   };
 
@@ -220,12 +225,15 @@ export default function LureDetailScreen({ route, navigation }) {
     );
   };
 
+  // Get lure image URL (supports both local and Supabase formats)
+  const lureImageUri = lure.image_url || lure.imageUri || lure.image_path;
+
   return (
     <ScrollView style={styles.container}>
       {/* Header with Image */}
       <View style={styles.header}>
-        {lure.imageUri && (
-          <Image source={{ uri: lure.imageUri }} style={styles.lureImage} />
+        {lureImageUri && (
+          <Image source={{ uri: lureImageUri }} style={styles.lureImage} />
         )}
         <View style={styles.headerInfo}>
           <Text style={styles.lureType}>{lure.lure_type || 'Unknown Lure'}</Text>
@@ -233,7 +241,7 @@ export default function LureDetailScreen({ route, navigation }) {
             Confidence: {lure.confidence || lure.chatgpt_analysis?.confidence || 'N/A'}%
           </Text>
           <Text style={styles.analysisDate}>
-            Analyzed: {new Date(lure.analysis_date || Date.now()).toLocaleDateString()}
+            Analyzed: {new Date(lure.analysis_date || lure.created_at || Date.now()).toLocaleDateString()}
           </Text>
         </View>
       </View>
