@@ -337,6 +337,94 @@ export const deleteLureImage = async (imagePath) => {
 };
 
 // ============================================================================
+// CATCHES (Catch Photos for Each Lure)
+// ============================================================================
+
+/**
+ * Add a catch to a lure
+ */
+export const addCatchToLure = async (lureAnalysisId, catchData) => {
+  try {
+    const user = await getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Upload catch image to storage
+    let imageUrl = null;
+    if (catchData.imageUri) {
+      const catchFileName = `catch_${Date.now()}.jpg`;
+      const uploadResult = await uploadLureImage(catchData.imageUri, catchFileName);
+      imageUrl = uploadResult.url;
+    }
+
+    const { data, error } = await supabase
+      .from('catches')
+      .insert([{
+        lure_analysis_id: lureAnalysisId,
+        user_id: user.id,
+        fish_species: catchData.fishSpecies,
+        weight: catchData.weight,
+        length: catchData.length,
+        location: catchData.location,
+        notes: catchData.notes,
+        image_url: imageUrl,
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, catch: data };
+  } catch (error) {
+    console.error('[Supabase] Add catch error:', error);
+    throw new Error(error.message || 'Failed to add catch');
+  }
+};
+
+/**
+ * Get all catches for a lure
+ */
+export const getCatchesForLure = async (lureAnalysisId) => {
+  try {
+    const user = await getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('catches')
+      .select('*')
+      .eq('lure_analysis_id', lureAnalysisId)
+      .eq('user_id', user.id)
+      .order('catch_date', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('[Supabase] Get catches error:', error);
+    return [];
+  }
+};
+
+/**
+ * Delete a catch
+ */
+export const deleteCatch = async (catchId) => {
+  try {
+    const user = await getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { error } = await supabase
+      .from('catches')
+      .delete()
+      .eq('id', catchId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('[Supabase] Delete catch error:', error);
+    throw new Error(error.message || 'Failed to delete catch');
+  }
+};
+
+// ============================================================================
 // STATISTICS
 // ============================================================================
 
@@ -410,6 +498,11 @@ export default {
   // Storage
   uploadLureImage,
   deleteLureImage,
+  
+  // Catches
+  addCatchToLure,
+  getCatchesForLure,
+  deleteCatch,
   
   // Stats
   getTackleBoxStats,

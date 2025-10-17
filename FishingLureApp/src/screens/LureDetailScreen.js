@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { addCatchToLure, deleteCatchFromLure } from '../services/storageService';
+import { addCatchToLure as addCatchLocal, deleteCatchFromLure } from '../services/storageService';
+import { addCatchToLure as addCatchSupabase, getCatchesForLure, deleteCatch } from '../services/supabaseService';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function LureDetailScreen({ route, navigation }) {
   const { lure } = route.params;
+  const { user } = useAuth();
+  const [catches, setCatches] = useState(lure.catches || []);
   const [addCatchModalVisible, setAddCatchModalVisible] = useState(false);
   const [viewCatchModalVisible, setViewCatchModalVisible] = useState(false);
   const [selectedCatch, setSelectedCatch] = useState(null);
@@ -28,6 +32,39 @@ export default function LureDetailScreen({ route, navigation }) {
     location: '',
     notes: '',
   });
+
+  // Helper to check if lure is from Supabase (has UUID format)
+  const isSupabaseLure = () => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return lure.id && uuidRegex.test(lure.id);
+  };
+
+  // Load catches from Supabase if it's a Supabase lure
+  useEffect(() => {
+    const loadCatches = async () => {
+      if (user && isSupabaseLure()) {
+        try {
+          const supabaseCatches = await getCatchesForLure(lure.id);
+          // Convert Supabase format to match local format
+          const formattedCatches = supabaseCatches.map(c => ({
+            id: c.id,
+            imageUri: c.image_url,
+            timestamp: c.catch_date || c.created_at,
+            fishSpecies: c.fish_species,
+            weight: c.weight,
+            length: c.length,
+            location: c.location,
+            notes: c.notes,
+          }));
+          setCatches(formattedCatches);
+          console.log('[LureDetail] Loaded catches from Supabase:', formattedCatches.length);
+        } catch (error) {
+          console.error('[LureDetail] Error loading catches:', error);
+        }
+      }
+    };
+    loadCatches();
+  }, [lure.id, user]);
 
   const pickCatchPhoto = async (useCamera = false) => {
     try {
@@ -69,14 +106,42 @@ export default function LureDetailScreen({ route, navigation }) {
     }
 
     try {
-      // Use the lure's ID - could be local timestamp or Supabase UUID
-      const lureIdentifier = lure.id || lure.timestamp || Date.now().toString();
-      
-      await addCatchToLure(lureIdentifier, {
+      const catchData = {
         imageUri: catchPhoto.uri,
         timestamp: new Date().toISOString(),
         ...catchDetails,
-      });
+      };
+
+      let newCatch;
+
+      // Use Supabase for Supabase lures, local storage for local lures
+      if (user && isSupabaseLure()) {
+        console.log('[LureDetail] Saving catch to Supabase for lure:', lure.id);
+        const result = await addCatchSupabase(lure.id, catchData);
+        // Convert to display format
+        newCatch = {
+          id: result.catch.id,
+          imageUri: result.catch.image_url,
+          timestamp: result.catch.catch_date || result.catch.created_at,
+          fishSpecies: result.catch.fish_species,
+          weight: result.catch.weight,
+          length: result.catch.length,
+          location: result.catch.location,
+          notes: result.catch.notes,
+        };
+      } else {
+        // Local storage
+        const lureIdentifier = lure.id || lure.timestamp || Date.now().toString();
+        console.log('[LureDetail] Saving catch locally for lure:', lureIdentifier);
+        await addCatchLocal(lureIdentifier, catchData);
+        newCatch = {
+          id: Date.now().toString(),
+          ...catchData,
+        };
+      }
+      
+      // Update local state
+      setCatches([...catches, newCatch]);
       
       Alert.alert('Success', 'Catch added successfully!');
       setAddCatchModalVisible(false);
@@ -88,9 +153,6 @@ export default function LureDetailScreen({ route, navigation }) {
         location: '',
         notes: '',
       });
-      
-      // Refresh the screen
-      navigation.setParams({ lure: { ...lure, catchCount: (lure.catchCount || 0) + 1 } });
     } catch (error) {
       console.error('[LureDetail] Save catch error:', error);
       Alert.alert('Error', `Failed to save catch: ${error.message}`);
@@ -108,12 +170,23 @@ export default function LureDetailScreen({ route, navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteCatchFromLure(lure.id, catchId);
+              // Use Supabase or local storage depending on lure type
+              if (user && isSupabaseLure()) {
+                await deleteCatch(catchId);
+                console.log('[LureDetail] Deleted catch from Supabase:', catchId);
+              } else {
+                await deleteCatchFromLure(lure.id, catchId);
+                console.log('[LureDetail] Deleted catch locally:', catchId);
+              }
+              
+              // Update local state
+              setCatches(catches.filter(c => c.id !== catchId));
+              
               Alert.alert('Success', 'Catch deleted');
               setViewCatchModalVisible(false);
-              navigation.setParams({ lure: { ...lure, catchCount: (lure.catchCount || 1) - 1 } });
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete catch');
+              console.error('[LureDetail] Delete catch error:', error);
+              Alert.alert('Error', `Failed to delete catch: ${error.message}`);
             }
           },
         },
@@ -302,12 +375,12 @@ export default function LureDetailScreen({ route, navigation }) {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="fish" size={20} color="#2c3e50" />
-          <Text style={styles.sectionTitle}>My Catches ({lure.catches?.length || 0})</Text>
+          <Text style={styles.sectionTitle}>My Catches ({catches.length})</Text>
         </View>
         
-        {lure.catches && lure.catches.length > 0 ? (
+        {catches && catches.length > 0 ? (
           <FlatList
-            data={lure.catches}
+            data={catches}
             horizontal
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.id}
