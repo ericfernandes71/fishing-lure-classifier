@@ -315,24 +315,48 @@ export const uploadLureImage = async (imageUri, fileName) => {
     // Create file path with user ID folder
     const filePath = `${user.id}/${fileName}`;
 
-    // For React Native, use XMLHttpRequest to read file as blob
-    const fileBlob = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.onload = function() {
-        resolve(xhr.response);
-      };
-      xhr.onerror = function() {
-        reject(new Error('Failed to read file'));
-      };
-      xhr.responseType = 'blob';
-      xhr.open('GET', imageUri, true);
-      xhr.send(null);
-    });
+    // Read file as base64 and convert to ArrayBuffer
+    const base64Response = await fetch(imageUri);
+    const base64Data = await base64Response.text();
+    
+    // If it's a data URI, extract the base64 part
+    let base64String = base64Data;
+    if (base64Data.startsWith('data:')) {
+      base64String = base64Data.split(',')[1];
+    } else {
+      // Not base64, read as arrayBuffer instead
+      const arrayBufferResponse = await fetch(imageUri);
+      const arrayBuffer = await arrayBufferResponse.arrayBuffer();
+      
+      // Upload ArrayBuffer to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('lure-images')
+        .upload(filePath, arrayBuffer, {
+          contentType: 'image/jpeg',
+          upsert: false,
+        });
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('lure-images')
+        .getPublicUrl(filePath);
+
+      return { success: true, path: data.path, url: urlData.publicUrl };
+    }
+    
+    // Convert base64 to ArrayBuffer
+    const binaryString = atob(base64String);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from('lure-images')
-      .upload(filePath, fileBlob, {
+      .upload(filePath, bytes.buffer, {
         contentType: 'image/jpeg',
         upsert: false,
       });
