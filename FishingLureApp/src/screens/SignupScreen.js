@@ -131,7 +131,7 @@ export default function SignupScreen({ navigation }) {
           </TouchableOpacity>
 
           <View style={styles.linkContainer}>
-            <Text style={styles.linkText}>Already have an account?</Text>
+            <Text style={styles.linkText}>Already have an account? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
               <Text style={styles.link}>Sign In</Text>
             </TouchableOpacity>
@@ -218,7 +218,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 20,
-    gap: 5,
   },
   linkText: {
     fontSize: 14,

@@ -304,14 +304,12 @@ const styles = StyleSheet.create({
     padding: 15,
     backgroundColor: '#f8f9fa',
     borderRadius: 8,
-    gap: 10,
   },
   statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 15,
     borderRadius: 8,
-    gap: 10,
   },
   statusConnected: {
     backgroundColor: '#d4edda',
@@ -325,6 +323,7 @@ const styles = StyleSheet.create({
   },
   statusIcon: {
     fontSize: 24,
+    marginRight: 10,
   },
   statusText: {
     fontSize: 16,
