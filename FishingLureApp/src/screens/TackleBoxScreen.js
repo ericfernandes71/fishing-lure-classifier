@@ -242,7 +242,7 @@ export default function TackleBoxScreen({ navigation }) {
           Target: {item.lure_details?.target_species?.join(', ') || 
                    item.chatgpt_analysis?.target_species?.join(', ') || 'Various'}
         </Text>
-        {item.catchCount > 0 && (
+        {item.catchCount && item.catchCount > 0 && (
           <View style={styles.catchBadge}>
             <Ionicons name="fish" size={16} color="#27ae60" />
             <Text style={styles.catchCount}>{item.catchCount} catch{item.catchCount !== 1 ? 'es' : ''}</Text>
