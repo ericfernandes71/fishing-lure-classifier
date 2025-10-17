@@ -188,20 +188,45 @@ export const saveLureAnalysis = async (analysisData) => {
 
 /**
  * Get all lure analyses for current user (Tackle Box)
+ * Includes catch count for each lure
  */
 export const getUserLureAnalyses = async () => {
   try {
     const user = await getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase
+    // Get all lure analyses
+    const { data: lures, error } = await supabase
       .from('lure_analyses')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+
+    // Get catch counts for all lures
+    if (lures && lures.length > 0) {
+      // Query catches and group by lure_analysis_id
+      const { data: catchCounts, error: catchError } = await supabase
+        .from('catches')
+        .select('lure_analysis_id')
+        .eq('user_id', user.id);
+
+      if (!catchError && catchCounts) {
+        // Count catches per lure
+        const countMap = {};
+        catchCounts.forEach(c => {
+          countMap[c.lure_analysis_id] = (countMap[c.lure_analysis_id] || 0) + 1;
+        });
+
+        // Add catchCount to each lure
+        lures.forEach(lure => {
+          lure.catchCount = countMap[lure.id] || 0;
+        });
+      }
+    }
+
+    return lures || [];
   } catch (error) {
     console.error('[Supabase] Get analyses error:', error);
     throw new Error(error.message || 'Failed to load tackle box');
