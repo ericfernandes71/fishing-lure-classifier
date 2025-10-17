@@ -306,67 +306,45 @@ export const bulkDeleteLureAnalyses = async (analysisIds) => {
 
 /**
  * Upload lure image to Supabase Storage
+ * Simple React Native compatible version using arrayBuffer
  */
 export const uploadLureImage = async (imageUri, fileName) => {
   try {
     const user = await getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
+    console.log('[Supabase] Uploading image:', fileName, 'from URI:', imageUri);
+
     // Create file path with user ID folder
     const filePath = `${user.id}/${fileName}`;
 
-    // Read file as base64 and convert to ArrayBuffer
-    const base64Response = await fetch(imageUri);
-    const base64Data = await base64Response.text();
+    // Read file as ArrayBuffer (works in React Native)
+    const response = await fetch(imageUri);
+    const arrayBuffer = await response.arrayBuffer();
     
-    // If it's a data URI, extract the base64 part
-    let base64String = base64Data;
-    if (base64Data.startsWith('data:')) {
-      base64String = base64Data.split(',')[1];
-    } else {
-      // Not base64, read as arrayBuffer instead
-      const arrayBufferResponse = await fetch(imageUri);
-      const arrayBuffer = await arrayBufferResponse.arrayBuffer();
-      
-      // Upload ArrayBuffer to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('lure-images')
-        .upload(filePath, arrayBuffer, {
-          contentType: 'image/jpeg',
-          upsert: false,
-        });
+    console.log('[Supabase] ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
 
-      if (error) throw error;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('lure-images')
-        .getPublicUrl(filePath);
-
-      return { success: true, path: data.path, url: urlData.publicUrl };
-    }
-    
-    // Convert base64 to ArrayBuffer
-    const binaryString = atob(base64String);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    // Upload to Supabase Storage
+    // Upload ArrayBuffer to Supabase Storage
     const { data, error } = await supabase.storage
       .from('lure-images')
-      .upload(filePath, bytes.buffer, {
+      .upload(filePath, arrayBuffer, {
         contentType: 'image/jpeg',
         upsert: false,
       });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Supabase] Storage upload error:', error);
+      throw error;
+    }
+
+    console.log('[Supabase] Upload successful:', data.path);
 
     // Get public URL
     const { data: urlData } = supabase.storage
       .from('lure-images')
       .getPublicUrl(filePath);
+
+    console.log('[Supabase] Public URL:', urlData.publicUrl);
 
     return { success: true, path: data.path, url: urlData.publicUrl };
   } catch (error) {
