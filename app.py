@@ -2,8 +2,10 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 from werkzeug.utils import secure_filename
 from mobile_lure_classifier import MobileLureClassifier
+from supabase_client import supabase_service
 import config
 import json
+import datetime
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = config.UPLOAD_FOLDER
@@ -21,10 +23,10 @@ def load_api_key():
     if api_key and api_key != 'your_openai_api_key_here':
         global mobile_classifier
         mobile_classifier = MobileLureClassifier(openai_api_key=api_key)
-        print("✅ OpenAI API key loaded successfully from config.py")
+        print("[OK] OpenAI API key loaded successfully from config.py")
         return True
     else:
-        print("⚠️ OpenAI API key not found in config.py. Please edit config.py with your actual API key.")
+        print("[WARNING] OpenAI API key not found in config.py. Please edit config.py with your actual API key.")
         return False
 
 # Try to load API key on startup
@@ -33,6 +35,15 @@ load_api_key()
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/health')
+def health():
+    """Simple health check endpoint for mobile apps"""
+    return jsonify({
+        'status': 'ok',
+        'message': 'Backend is running',
+        'timestamp': datetime.datetime.now().isoformat()
+    })
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -50,18 +61,18 @@ def upload_file():
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
-            print(f"📸 File uploaded: {filename}")
+            print(f"[INFO] File uploaded: {filename}")
             
             # Check if classifier is available
             if not mobile_classifier:
                 return jsonify({'error': 'Lure classifier not initialized. Please set up your API key in config.py first.'})
             
             # Analyze the lure using ChatGPT Vision
-            print("🔍 Starting lure analysis...")
+            print("[INFO] Starting lure analysis...")
             results = mobile_classifier.analyze_lure(filepath)
             
             if 'error' in results:
-                print(f"❌ Analysis failed: {results['error']}")
+                print(f"[ERROR] Analysis failed: {results['error']}")
                 return jsonify({'error': results['error']})
             
             # Save results to JSON file with image path
@@ -70,13 +81,32 @@ def upload_file():
             json_file = mobile_classifier.save_analysis_to_json(results)
             results['json_file'] = json_file
             
-            print(f"✅ Analysis completed successfully")
-            print(f"📊 Results: {results}")
+            # Save to Supabase if user_id is provided and Supabase is enabled
+            user_id = request.form.get('user_id') or request.headers.get('X-User-ID')
+            
+            if user_id and supabase_service.is_enabled():
+                try:
+                    # Upload image to Supabase Storage
+                    image_url = supabase_service.upload_lure_image(user_id, filepath, filename)
+                    if image_url:
+                        results['image_url'] = image_url
+                    
+                    # Save analysis to Supabase database
+                    supabase_result = supabase_service.save_lure_analysis(user_id, results)
+                    if supabase_result:
+                        results['supabase_id'] = supabase_result.get('id')
+                        print(f"[OK] Saved to Supabase for user {user_id}")
+                except Exception as e:
+                    print(f"[WARNING] Supabase save failed: {str(e)}")
+                    # Continue anyway - local save succeeded
+            
+            print(f"[OK] Analysis completed successfully")
+            print(f"[INFO] Results: {results}")
             
             return jsonify(results)
             
         except Exception as e:
-            print(f"❌ Error during analysis: {str(e)}")
+            print(f"[ERROR] Error during analysis: {str(e)}")
             return jsonify({'error': f'Analysis failed: {str(e)}'})
         finally:
             # Don't clean up the uploaded file - we want to keep it for the tackle box
@@ -176,9 +206,31 @@ def tackle_box():
         print(f"Error in tackle_box: {e}")
         return jsonify({'error': f'Failed to load tackle box: {str(e)}'})
 
+@app.route('/api/supabase/tackle-box')
+def api_supabase_tackle_box():
+    """API endpoint to get tackle box data from Supabase"""
+    try:
+        # Get user_id from request
+        user_id = request.args.get('user_id') or request.headers.get('X-User-ID')
+        
+        if not user_id:
+            return jsonify({'error': 'User ID required'}), 401
+        
+        if not supabase_service.is_enabled():
+            return jsonify({'error': 'Supabase not configured'}), 503
+        
+        # Get lure analyses from Supabase
+        results = supabase_service.get_user_lure_analyses(user_id)
+        
+        return jsonify({'results': results})
+        
+    except Exception as e:
+        print(f"Error in api_supabase_tackle_box: {e}")
+        return jsonify({'error': f'Failed to load tackle box: {str(e)}'}), 500
+
 @app.route('/api/tackle-box')
 def api_tackle_box():
-    """API endpoint to get tackle box data"""
+    """API endpoint to get tackle box data (local files - backwards compatibility)"""
     try:
         # Get all analysis result files
         results_dir = config.RESULTS_FOLDER
@@ -270,7 +322,7 @@ def delete_lure(result_id):
         
         # Delete the file
         os.remove(result_file)
-        print(f"🗑️ Deleted lure analysis: {result_file}")
+        print(f"[INFO] Deleted lure analysis: {result_file}")
         
         return jsonify({'success': True, 'message': 'Lure deleted successfully'})
         
@@ -308,7 +360,7 @@ def bulk_delete_lures():
                 if result_file and os.path.exists(result_file):
                     os.remove(result_file)
                     deleted_count += 1
-                    print(f"🗑️ Deleted lure analysis: {result_file}")
+                    print(f"[INFO] Deleted lure analysis: {result_file}")
                 else:
                     failed_deletions.append(result_id)
                     
@@ -344,15 +396,16 @@ def uploaded_file(filename):
         return jsonify({'error': 'Image not found'}), 404
 
 if __name__ == '__main__':
-    print("🎣 Mobile Lure Classifier Flask App Starting...")
+    print("=" * 60)
+    print("Mobile Lure Classifier Flask App Starting...")
     print("=" * 60)
     
     if mobile_classifier:
-        print("✅ OpenAI API key loaded from config.py - Ready for lure analysis!")
-        print("🌐 Server starting on http://localhost:5000")
+        print("[OK] OpenAI API key loaded from config.py - Ready for lure analysis!")
+        print("[INFO] Server starting on http://localhost:5000")
     else:
-        print("⚠️  OpenAI API key not loaded - Analysis will not work")
-        print("💡 Edit config.py with your OpenAI API key to enable analysis")
+        print("[WARNING] OpenAI API key not loaded - Analysis will not work")
+        print("[INFO] Edit config.py with your OpenAI API key to enable analysis")
     
     print("=" * 60)
     app.run(debug=config.FLASK_DEBUG, host=config.FLASK_HOST, port=config.FLASK_PORT)

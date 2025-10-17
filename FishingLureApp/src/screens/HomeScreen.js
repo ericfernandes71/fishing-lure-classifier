@@ -15,8 +15,11 @@ import { Camera } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeLure } from '../services/lureAnalysisService';
 import { saveLureToTackleBox } from '../services/storageService';
+import { saveLureAnalysis } from '../services/supabaseService';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function HomeScreen() {
+  const { user } = useAuth();
   const [selectedImage, setSelectedImage] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -79,14 +82,30 @@ export default function HomeScreen() {
       const result = await analyzeLure(selectedImage.uri);
       setAnalysisResult(result);
       
-      // Save to tackle box
+      // Save to local tackle box (backwards compatibility)
       await saveLureToTackleBox({
         imageUri: selectedImage.uri,
         analysis: result,
         timestamp: new Date().toISOString(),
       });
       
-      Alert.alert('Success', 'Lure analyzed and saved to tackle box!');
+      // Also save to Supabase if user is logged in
+      if (user && result.supabase_id) {
+        console.log('[HomeScreen] Analysis already saved to Supabase by backend');
+        Alert.alert('Success', 'Lure analyzed and saved to your cloud tackle box! ☁️');
+      } else if (user) {
+        // Try to save to Supabase if backend didn't do it
+        try {
+          await saveLureAnalysis(result);
+          console.log('[HomeScreen] Saved to Supabase from mobile app');
+          Alert.alert('Success', 'Lure analyzed and saved to your cloud tackle box! ☁️');
+        } catch (supabaseError) {
+          console.log('[HomeScreen] Supabase save failed, using local only');
+          Alert.alert('Success', 'Lure analyzed and saved locally!');
+        }
+      } else {
+        Alert.alert('Success', 'Lure analyzed and saved to tackle box!');
+      }
     } catch (error) {
       if (__DEV__) {
         console.error('Analysis error:', error);

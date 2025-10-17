@@ -175,7 +175,7 @@ export const SecurityUtils = {
 // Environment-specific configurations
 export const ENV_CONFIG = {
   development: {
-    BACKEND_URL: 'http://localhost:5000',
+    BACKEND_URL: 'https://corolitic-diane-unapprehending.ngrok-free.dev',
     LOG_LEVEL: 'debug',
     ENABLE_DEBUG_LOGS: true,
   },

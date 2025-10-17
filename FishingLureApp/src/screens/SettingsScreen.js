@@ -3,34 +3,32 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   Alert,
   ScrollView,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { testBackendConnection } from '../services/backendService';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function SettingsScreen() {
-  const [apiKey, setApiKey] = useState('');
-  const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
   const [autoSave, setAutoSave] = useState(true);
   const [notifications, setNotifications] = useState(true);
+  const [backendStatus, setBackendStatus] = useState(null);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(false);
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
     loadSettings();
+    checkBackendConnection();
   }, []);
 
   const loadSettings = async () => {
     try {
-      const encryptedApiKey = await AsyncStorage.getItem('openai_api_key');
       const savedAutoSave = await AsyncStorage.getItem('auto_save');
       const savedNotifications = await AsyncStorage.getItem('notifications');
-      
-      // Load API key directly
-      if (encryptedApiKey) {
-        setApiKey(encryptedApiKey);
-      }
       
       if (savedAutoSave !== null) setAutoSave(JSON.parse(savedAutoSave));
       if (savedNotifications !== null) setNotifications(JSON.parse(savedNotifications));
@@ -41,60 +39,22 @@ export default function SettingsScreen() {
     }
   };
 
-  const saveApiKey = async () => {
-    const trimmedKey = apiKey.trim();
-    
-    // Enhanced validation
-    if (!trimmedKey) {
-      Alert.alert('Error', 'Please enter a valid API key');
-      return;
-    }
-    
-    // Validate API key format
-    if (!trimmedKey.startsWith('sk-') || trimmedKey.length < 20) {
-      Alert.alert('Invalid Format', 'OpenAI API keys should start with "sk-" and be at least 20 characters long');
-      return;
-    }
-
+  const checkBackendConnection = async () => {
+    setIsCheckingBackend(true);
     try {
-      // Store API key directly (for now, to fix the issue)
-      await AsyncStorage.setItem('openai_api_key', trimmedKey);
-      Alert.alert('Success', 'API key saved successfully!');
-      
-      // Clear the input field for security
-      setApiKey('');
+      console.log('[Settings] Testing backend connection...');
+      const result = await testBackendConnection();
+      console.log('[Settings] Backend test result:', result);
+      setBackendStatus(result);
     } catch (error) {
-      if (__DEV__) {
-        console.error('Error saving API key:', error);
-      }
-      Alert.alert('Error', 'Failed to save API key');
+      console.error('[Settings] Backend connection error:', error);
+      setBackendStatus({ 
+        connected: false, 
+        error: 'Connection test failed: ' + error.message 
+      });
+    } finally {
+      setIsCheckingBackend(false);
     }
-  };
-
-  const clearApiKey = () => {
-    Alert.alert(
-      'Clear API Key',
-      'Are you sure you want to clear your API key?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem('openai_api_key');
-              setApiKey('');
-              Alert.alert('Success', 'API key cleared');
-            } catch (error) {
-              if (__DEV__) {
-                console.error('Error clearing API key:', error);
-              }
-              Alert.alert('Error', 'Failed to clear API key');
-            }
-          },
-        },
-      ]
-    );
   };
 
   const saveSetting = async (key, value) => {
@@ -135,6 +95,27 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to logout');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -142,42 +123,79 @@ export default function SettingsScreen() {
         <Text style={styles.subtitle}>Configure your app preferences</Text>
       </View>
 
+      {/* User Profile Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🔑 API Configuration</Text>
+        <Text style={styles.sectionTitle}>👤 Account</Text>
         
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>OpenAI API Key</Text>
-          <TextInput
-            style={styles.input}
-            value={apiKey}
-            onChangeText={setApiKey}
-            placeholder="Enter your OpenAI API key"
-            secureTextEntry={!isApiKeyVisible}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TouchableOpacity
-            style={styles.visibilityButton}
-            onPress={() => setIsApiKeyVisible(!isApiKeyVisible)}
-          >
-            <Text style={styles.visibilityButtonText}>
-              {isApiKeyVisible ? '🙈' : '👁️'}
+        <View style={styles.userInfo}>
+          <View style={styles.userAvatar}>
+            <Text style={styles.userAvatarText}>
+              {user?.email?.charAt(0).toUpperCase() || '?'}
             </Text>
-          </TouchableOpacity>
+          </View>
+          <View style={styles.userDetails}>
+            <Text style={styles.userName}>{user?.user_metadata?.full_name || 'User'}</Text>
+            <Text style={styles.userEmail}>{user?.email}</Text>
+          </View>
         </View>
 
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.saveButton} onPress={saveApiKey}>
-            <Text style={styles.saveButtonText}>💾 Save API Key</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.clearButton} onPress={clearApiKey}>
-            <Text style={styles.clearButtonText}>🗑️ Clear</Text>
-          </TouchableOpacity>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>🚪 Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>🔐 Backend Connection</Text>
+        
+        <View style={styles.statusContainer}>
+          {isCheckingBackend ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#3498db" />
+              <Text style={styles.statusText}>Checking backend connection...</Text>
+            </View>
+          ) : backendStatus ? (
+            <>
+              <View style={[
+                styles.statusIndicator, 
+                backendStatus.connected ? styles.statusConnected : styles.statusDisconnected
+              ]}>
+                <Text style={styles.statusIcon}>
+                  {backendStatus.connected ? '✅' : '❌'}
+                </Text>
+                <Text style={styles.statusText}>
+                  {backendStatus.connected ? 'Connected' : 'Disconnected'}
+                </Text>
+              </View>
+              
+              {!backendStatus.connected && backendStatus.suggestion && (
+                <Text style={styles.errorText}>{backendStatus.suggestion}</Text>
+              )}
+              
+              {!backendStatus.connected && backendStatus.url && (
+                <Text style={styles.errorText}>Trying to connect to: {backendStatus.url}</Text>
+              )}
+              
+              {!backendStatus.connected && backendStatus.error && (
+                <Text style={styles.errorText}>Error: {backendStatus.error}</Text>
+              )}
+            </>
+          ) : (
+            <Text style={styles.statusText}>Not checked yet</Text>
+          )}
         </View>
+
+        <TouchableOpacity 
+          style={styles.refreshButton} 
+          onPress={checkBackendConnection}
+          disabled={isCheckingBackend}
+        >
+          <Text style={styles.refreshButtonText}>
+            🔄 Test Connection
+          </Text>
+        </TouchableOpacity>
 
         <Text style={styles.helpText}>
-          Get your API key from{' '}
-          <Text style={styles.link}>https://platform.openai.com/api-keys</Text>
+          The API key is securely stored on the backend server. This app connects to the backend to analyze your lures without exposing the API key.
         </Text>
       </View>
 
@@ -277,60 +295,58 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
     marginBottom: 15,
   },
-  inputContainer: {
-    position: 'relative',
+  statusContainer: {
     marginBottom: 15,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#f8f9fa',
-    paddingRight: 50,
-  },
-  visibilityButton: {
-    position: 'absolute',
-    right: 10,
-    top: 35,
-    padding: 5,
-  },
-  visibilityButtonText: {
-    fontSize: 20,
-  },
-  buttonContainer: {
+  loadingContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
     gap: 10,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 8,
+    gap: 10,
+  },
+  statusConnected: {
+    backgroundColor: '#d4edda',
+    borderColor: '#c3e6cb',
+    borderWidth: 1,
+  },
+  statusDisconnected: {
+    backgroundColor: '#f8d7da',
+    borderColor: '#f5c6cb',
+    borderWidth: 1,
+  },
+  statusIcon: {
+    fontSize: 24,
+  },
+  statusText: {
+    fontSize: 16,
+    color: '#2c3e50',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#e74c3c',
+    marginTop: 10,
+    lineHeight: 20,
+  },
+  refreshButton: {
+    backgroundColor: '#3498db',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
     marginBottom: 15,
   },
-  saveButton: {
-    backgroundColor: '#27ae60',
-    padding: 12,
-    borderRadius: 8,
-    flex: 1,
-    alignItems: 'center',
-  },
-  saveButtonText: {
+  refreshButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-  },
-  clearButton: {
-    backgroundColor: '#e74c3c',
-    padding: 12,
-    borderRadius: 8,
-    flex: 1,
-    alignItems: 'center',
-  },
-  clearButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    fontSize: 16,
   },
   helpText: {
     fontSize: 14,
@@ -384,5 +400,51 @@ const styles = StyleSheet.create({
     color: '#e74c3c',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  userAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#3498db',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  userAvatarText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: '#7f8c8d',
+  },
+  logoutButton: {
+    backgroundColor: '#e74c3c',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });

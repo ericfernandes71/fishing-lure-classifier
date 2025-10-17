@@ -136,3 +136,8 @@ uploads/
 
 # Configuration files with sensitive data
 config.py
+
+# ngrok
+ngrok.exe
+ngrok.zip
+

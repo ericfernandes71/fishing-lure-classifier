@@ -197,14 +197,14 @@ class MobileLureClassifier:
         
         try:
             # Compress image for API efficiency
-            print("🖼️ Compressing image for API...")
+            print("[INFO] Compressing image for API...")
             compressed_path = self._compress_image_for_api(image_path)
             
             # Encode compressed image to base64
             with open(compressed_path, "rb") as image_file:
                 encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
             
-            print(f"📊 Compressed image size: {len(encoded_image)} characters (base64)")
+            print(f"[INFO] Compressed image size: {len(encoded_image)} characters (base64)")
             
             # ChatGPT Vision API request
             headers = {
@@ -248,7 +248,7 @@ class MobileLureClassifier:
                 "max_tokens": config.MAX_TOKENS
             }
             
-            print("🚀 Sending request to ChatGPT Vision API...")
+            print("[INFO] Sending request to ChatGPT Vision API...")
             response = requests.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers=headers,
@@ -301,7 +301,7 @@ class MobileLureClassifier:
                     }
                     
                 except json.JSONDecodeError:
-                    print(f"⚠️ JSON parsing failed, raw response: {content}")
+                    print(f"[WARNING] JSON parsing failed, raw response: {content}")
                     return {"error": f"Failed to parse ChatGPT response: {content}"}
             else:
                 return {"error": f"API request failed: {response.status_code} - {response.text}"}
@@ -434,11 +434,11 @@ class MobileLureClassifier:
                         file_size_kb = os.path.getsize(compressed_path) / 1024
                         print(f"Aggressively compressed: {file_size_kb:.1f} KB")
                 
-                print(f"✅ Image compressed successfully: {compressed_path}")
+                print(f"[OK] Image compressed successfully: {compressed_path}")
                 return compressed_path
                 
         except Exception as e:
-            print(f"❌ Image compression failed: {str(e)}")
+            print(f"[ERROR] Image compression failed: {str(e)}")
             return image_path  # Return original if compression fails
     
     def _cleanup_compressed_image(self, compressed_path: str):
@@ -448,9 +448,9 @@ class MobileLureClassifier:
         try:
             if compressed_path != compressed_path and os.path.exists(compressed_path):
                 os.remove(compressed_path)
-                print(f"🧹 Cleaned up compressed image: {compressed_path}")
+                print(f"[INFO] Cleaned up compressed image: {compressed_path}")
         except Exception as e:
-            print(f"⚠️ Failed to cleanup compressed image: {str(e)}")
+            print(f"[WARNING] Failed to cleanup compressed image: {str(e)}")
 
     def estimate_api_cost(self, image_path: str) -> Dict:
         """
@@ -478,7 +478,7 @@ class MobileLureClassifier:
                 "compression_ratio": f"{((os.path.getsize(image_path) - os.path.getsize(compressed_path)) / os.path.getsize(image_path) * 100):.1f}%",
                 "estimated_tokens": estimated_tokens,
                 "estimated_cost_usd": f"${estimated_cost:.4f}",
-                "cost_efficiency": "✅ Good" if file_size_kb < 500 else "⚠️ High cost"
+                "cost_efficiency": "[OK] Good" if file_size_kb < 500 else "[WARNING] High cost"
             }
             
         except Exception as e:
@@ -486,21 +486,21 @@ class MobileLureClassifier:
 
 def main():
     """Example usage of the Mobile Lure Classifier"""
-    print("🎣 Mobile Lure Classifier Demo")
+    print("Mobile Lure Classifier Demo")
     print("=" * 50)
     
     # Initialize classifier (you'll need to add your OpenAI API key)
     classifier = MobileLureClassifier()
     
-    print("💡 To use ChatGPT Vision API, set your OpenAI API key in config.py:")
+    print("[INFO] To use ChatGPT Vision API, set your OpenAI API key in config.py:")
     print("   OPENAI_API_KEY = 'your-actual-api-key-here'")
     
-    print("\n🔍 Available analysis methods:")
+    print("\n[INFO] Available analysis methods:")
     print("   1. classifier.analyze_lure(image_path) - ChatGPT Vision analysis")
     print("   2. classifier.get_lure_info(lure_type) - Get lure information")
     print("   3. classifier.estimate_api_cost(image_path) - Cost estimation")
     
-    print("\n🚀 Benefits of mobile-optimized approach:")
+    print("\n[INFO] Benefits of mobile-optimized approach:")
     print("   - Lightweight: No heavy CV models")
     print("   - Fast: API-first architecture")
     print("   - Accurate: ChatGPT Vision analysis")

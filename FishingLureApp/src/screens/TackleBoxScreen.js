@@ -15,6 +15,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { getTackleBox, deleteLureFromTackleBox, toggleFavorite } from '../services/storageService';
+import { getUserLureAnalyses, deleteLureAnalysis } from '../services/supabaseService';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function TackleBoxScreen({ navigation }) {
   const [lures, setLures] = useState([]);
@@ -28,17 +30,33 @@ export default function TackleBoxScreen({ navigation }) {
     confidence: '',
     showFavoritesOnly: false,
   });
+  const [useSupabase, setUseSupabase] = useState(true); // Use Supabase by default
+  const { user } = useAuth();
 
   const loadTackleBox = async () => {
     try {
       if (__DEV__) {
         console.log('Loading tackle box...');
       }
-      const tackleBoxData = await getTackleBox();
-      if (__DEV__) {
-        console.log('Tackle box data loaded:', tackleBoxData);
-        console.log('Number of lures:', tackleBoxData.length);
+      
+      let tackleBoxData = [];
+      
+      // Try Supabase first if user is logged in
+      if (user && useSupabase) {
+        try {
+          tackleBoxData = await getUserLureAnalyses();
+          console.log('[TackleBox] Loaded from Supabase:', tackleBoxData.length, 'lures');
+        } catch (supabaseError) {
+          console.log('[TackleBox] Supabase failed, falling back to local:', supabaseError.message);
+          // Fallback to local storage
+          tackleBoxData = await getTackleBox();
+        }
+      } else {
+        // Use local storage
+        tackleBoxData = await getTackleBox();
+        console.log('[TackleBox] Loaded from local storage:', tackleBoxData.length, 'lures');
       }
+      
       setLures(tackleBoxData);
       setFilteredLures(tackleBoxData);
     } catch (error) {

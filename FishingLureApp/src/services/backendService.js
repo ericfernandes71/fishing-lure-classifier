@@ -1,9 +1,20 @@
 import axios from 'axios';
+import { supabase } from '../config/supabase';
 
 // Configuration - Use environment variables for security
 const BACKEND_URL = __DEV__ 
-  ? 'http://localhost:5000'  // Development only
+  ? 'https://corolitic-diane-unapprehending.ngrok-free.dev'  // Development - ngrok tunnel with HTTPS
   : 'https://your-production-server.com'; // Production URL - UPDATE THIS!
+
+// Helper to get current user ID
+const getCurrentUserId = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.id || null;
+  } catch (error) {
+    return null;
+  }
+};
 
 // Input validation helper
 const validateImageUri = (imageUri) => {
@@ -24,6 +35,9 @@ export const analyzeLureWithBackend = async (imageUri) => {
     // Validate input
     validateImageUri(imageUri);
     
+    // Get current user ID
+    const userId = await getCurrentUserId();
+    
     // Create FormData for file upload
     const formData = new FormData();
     
@@ -40,13 +54,19 @@ export const analyzeLureWithBackend = async (imageUri) => {
     };
     
     formData.append('file', file);
+    
+    // Add user_id if available
+    if (userId) {
+      formData.append('user_id', userId);
+    }
 
     // Make request to Flask backend
     const apiResponse = await axios.post(`${BACKEND_URL}/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
+        ...(userId && { 'X-User-ID': userId }), // Include user ID in headers
       },
-      timeout: 30000, // 30 second timeout
+      timeout: 60000, // 60 second timeout for analysis
     });
 
     return apiResponse.data;
@@ -94,7 +114,7 @@ export const estimateCostWithBackend = async (imageUri) => {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 10000,
+      timeout: 30000, // 30 second timeout
     });
 
     return apiResponse.data;
@@ -110,7 +130,7 @@ export const estimateCostWithBackend = async (imageUri) => {
 export const getTackleBoxFromBackend = async () => {
   try {
     const response = await axios.get(`${BACKEND_URL}/api/tackle-box`, {
-      timeout: 10000,
+      timeout: 30000, // 30 second timeout
     });
     
     return response.data.results || [];
@@ -122,10 +142,36 @@ export const getTackleBoxFromBackend = async () => {
   }
 };
 
+export const getTackleBoxFromSupabase = async () => {
+  try {
+    // Get current user ID
+    const userId = await getCurrentUserId();
+    
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    
+    const response = await axios.get(`${BACKEND_URL}/api/supabase/tackle-box`, {
+      params: { user_id: userId },
+      headers: {
+        'X-User-ID': userId,
+      },
+      timeout: 30000,
+    });
+    
+    return response.data.results || [];
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error fetching Supabase tackle box:', error);
+    }
+    throw new Error('Failed to load tackle box from cloud.');
+  }
+};
+
 export const deleteLureFromBackend = async (lureId) => {
   try {
     const response = await axios.delete(`${BACKEND_URL}/api/delete-lure/${lureId}`, {
-      timeout: 10000,
+      timeout: 30000, // 30 second timeout
     });
     
     return response.data;
@@ -140,15 +186,24 @@ export const deleteLureFromBackend = async (lureId) => {
 // Helper function to test backend connection
 export const testBackendConnection = async () => {
   try {
-    const response = await axios.get(`${BACKEND_URL}/`, {
-      timeout: 5000,
+    console.log('[BackendService] Testing connection to:', BACKEND_URL);
+    const response = await axios.get(`${BACKEND_URL}/health`, {
+      timeout: 10000, // 10 seconds should be enough for a simple JSON response
     });
-    return { connected: true, status: response.status };
+    console.log('[BackendService] Connection successful! Response:', response.data);
+    return { 
+      connected: true, 
+      status: response.status,
+      message: response.data.message 
+    };
   } catch (error) {
+    console.error('[BackendService] Connection failed:', error.message);
+    console.error('[BackendService] Error details:', error);
     return { 
       connected: false, 
       error: error.message,
-      suggestion: 'Make sure your Flask server is running on the correct port and accessible from your device.'
+      suggestion: 'Make sure your Flask server is running on the correct port and accessible from your device.',
+      url: BACKEND_URL // Include URL in response for debugging
     };
   }
 };
