@@ -287,17 +287,27 @@ export const uploadLureImage = async (imageUri, fileName) => {
     const user = await getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    // Convert image URI to blob
-    const response = await fetch(imageUri);
-    const blob = await response.blob();
-
     // Create file path with user ID folder
     const filePath = `${user.id}/${fileName}`;
+
+    // For React Native, use XMLHttpRequest to read file as blob
+    const fileBlob = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = function() {
+        resolve(xhr.response);
+      };
+      xhr.onerror = function() {
+        reject(new Error('Failed to read file'));
+      };
+      xhr.responseType = 'blob';
+      xhr.open('GET', imageUri, true);
+      xhr.send(null);
+    });
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from('lure-images')
-      .upload(filePath, blob, {
+      .upload(filePath, fileBlob, {
         contentType: 'image/jpeg',
         upsert: false,
       });
@@ -305,11 +315,11 @@ export const uploadLureImage = async (imageUri, fileName) => {
     if (error) throw error;
 
     // Get public URL
-    const { data: { publicUrl } } = supabase.storage
+    const { data: urlData } = supabase.storage
       .from('lure-images')
       .getPublicUrl(filePath);
 
-    return { success: true, path: data.path, url: publicUrl };
+    return { success: true, path: data.path, url: urlData.publicUrl };
   } catch (error) {
     console.error('[Supabase] Upload image error:', error);
     throw new Error(error.message || 'Failed to upload image');
