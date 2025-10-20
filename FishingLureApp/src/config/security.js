@@ -180,7 +180,7 @@ export const ENV_CONFIG = {
     ENABLE_DEBUG_LOGS: true,
   },
   production: {
-    BACKEND_URL: 'https://your-production-server.com', // UPDATE THIS!
+    BACKEND_URL: 'https://fishing-lure-backend.onrender.com',
     LOG_LEVEL: 'error',
     ENABLE_DEBUG_LOGS: false,
   },
