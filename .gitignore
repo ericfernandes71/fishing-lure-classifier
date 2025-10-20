@@ -135,7 +135,7 @@ uploads/
 *.log
 
 # Configuration files with sensitive data
-config.py
+
 
 # ngrok
 ngrok.exe
