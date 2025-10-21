@@ -105,9 +105,9 @@ export default function TackleBoxScreen({ navigation }) {
       });
     }
 
-    // Sort by catches if enabled
+    // Sort by catches if enabled (create new array to avoid mutation issues)
     if (selectedFilters.sortByCatches) {
-      filtered = filtered.sort((a, b) => {
+      filtered = [...filtered].sort((a, b) => {
         const catchesA = a.catchCount || 0;
         const catchesB = b.catchCount || 0;
         return catchesB - catchesA; // Descending order (most catches first)
@@ -235,6 +235,9 @@ export default function TackleBoxScreen({ navigation }) {
             />
           </TouchableOpacity>
         </View>
+        <Text style={styles.confidence}>
+          AI Scan Confidence: {item.confidence || item.chatgpt_analysis?.confidence || 'N/A'}%
+        </Text>
         <Text style={styles.targetSpecies}>
           Target: {item.lure_details?.target_species?.join(', ') || 
                    item.chatgpt_analysis?.target_species?.join(', ') || 'Various'}
