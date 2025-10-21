@@ -311,7 +311,7 @@ export default function LureDetailScreen({ route, navigation }) {
         <View style={styles.headerInfo}>
           <Text style={styles.lureType}>{lure.lure_type || 'Unknown Lure'}</Text>
           <Text style={styles.confidence}>
-            Confidence: {lure.confidence || lure.chatgpt_analysis?.confidence || 'N/A'}%
+            AI Scan Confidence: {lure.confidence || lure.chatgpt_analysis?.confidence || 'N/A'}%
           </Text>
           <Text style={styles.analysisDate}>
             Analyzed: {new Date(lure.analysis_date || lure.created_at || Date.now()).toLocaleDateString()}

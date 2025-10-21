@@ -313,8 +313,9 @@ export default function TackleBoxScreen({ navigation }) {
           <View style={styles.filterSection}>
             <Text style={styles.filterLabel}>🔎 Search</Text>
             <TextInput
-              style={styles.searchInput}
+              style={styles.modalSearchInput}
               placeholder="Search by lure type, fish species..."
+              placeholderTextColor="#95a5a6"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -753,5 +754,15 @@ const styles = StyleSheet.create({
   },
   sortToggleTextActive: {
     color: '#f39c12',
+  },
+  modalSearchInput: {
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 10,
+    fontSize: 16,
+    color: '#2c3e50',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
   },
 });
