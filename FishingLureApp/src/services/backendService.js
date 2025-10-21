@@ -2,9 +2,7 @@ import axios from 'axios';
 import { supabase } from '../config/supabase';
 
 // Configuration - Use environment variables for security
-const BACKEND_URL = __DEV__ 
-  ? 'https://corolitic-diane-unapprehending.ngrok-free.dev'  // Development - ngrok tunnel with HTTPS
-  : 'https://your-production-server.com'; // Production URL - UPDATE THIS!
+const BACKEND_URL = 'https://fishing-lure-backend.onrender.com'; // Production backend - always available!
 
 // Helper to get current user ID
 const getCurrentUserId = async () => {
