@@ -22,6 +22,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadSettings();
+    // Check backend connection silently in background
     checkBackendConnection();
   }, []);
 
@@ -145,61 +146,6 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🔐 Backend Connection</Text>
-        
-        <View style={styles.statusContainer}>
-          {isCheckingBackend ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#3498db" />
-              <Text style={styles.statusText}>Checking backend connection...</Text>
-            </View>
-          ) : backendStatus ? (
-            <>
-              <View style={[
-                styles.statusIndicator, 
-                backendStatus.connected ? styles.statusConnected : styles.statusDisconnected
-              ]}>
-                <Text style={styles.statusIcon}>
-                  {backendStatus.connected ? '✅' : '❌'}
-                </Text>
-                <Text style={styles.statusText}>
-                  {backendStatus.connected ? 'Connected' : 'Disconnected'}
-                </Text>
-              </View>
-              
-              {!backendStatus.connected && backendStatus.suggestion && (
-                <Text style={styles.errorText}>{backendStatus.suggestion}</Text>
-              )}
-              
-              {!backendStatus.connected && backendStatus.url && (
-                <Text style={styles.errorText}>Trying to connect to: {backendStatus.url}</Text>
-              )}
-              
-              {!backendStatus.connected && backendStatus.error && (
-                <Text style={styles.errorText}>Error: {backendStatus.error}</Text>
-              )}
-            </>
-          ) : (
-            <Text style={styles.statusText}>Not checked yet</Text>
-          )}
-        </View>
-
-        <TouchableOpacity 
-          style={styles.refreshButton} 
-          onPress={checkBackendConnection}
-          disabled={isCheckingBackend}
-        >
-          <Text style={styles.refreshButtonText}>
-            🔄 Test Connection
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={styles.helpText}>
-          The API key is securely stored on the backend server. This app connects to the backend to analyze your lures without exposing the API key.
-        </Text>
-      </View>
-
-      <View style={styles.section}>
         <Text style={styles.sectionTitle}>🎣 App Preferences</Text>
         
         <View style={styles.settingRow}>
@@ -243,17 +189,6 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>⚠️ Danger Zone</Text>
-        
-        <TouchableOpacity style={styles.dangerButton} onPress={clearAllData}>
-          <Text style={styles.dangerButtonText}>🗑️ Clear All Data</Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.dangerText}>
-          This will delete all your analyzed lures, settings, and API keys.
-        </Text>
-      </View>
     </ScrollView>
   );
 }

@@ -27,7 +27,7 @@ export default function TackleBoxScreen({ navigation }) {
   const [selectedFilters, setSelectedFilters] = useState({
     lureType: '',
     targetSpecies: '',
-    confidence: '',
+    sortByCatches: false,
     showFavoritesOnly: false,
   });
   const [useSupabase, setUseSupabase] = useState(true); // Use Supabase by default
@@ -105,12 +105,12 @@ export default function TackleBoxScreen({ navigation }) {
       });
     }
 
-    // Confidence filter
-    if (selectedFilters.confidence) {
-      const minConfidence = parseInt(selectedFilters.confidence);
-      filtered = filtered.filter(lure => {
-        const confidence = lure.confidence || lure.chatgpt_analysis?.confidence || 0;
-        return confidence >= minConfidence;
+    // Sort by catches if enabled
+    if (selectedFilters.sortByCatches) {
+      filtered = filtered.sort((a, b) => {
+        const catchesA = a.catchCount || 0;
+        const catchesB = b.catchCount || 0;
+        return catchesB - catchesA; // Descending order (most catches first)
       });
     }
 
@@ -123,7 +123,7 @@ export default function TackleBoxScreen({ navigation }) {
     setSelectedFilters({
       lureType: '',
       targetSpecies: '',
-      confidence: '',
+      sortByCatches: false,
       showFavoritesOnly: false,
     });
     setFilteredLures(lures);
@@ -235,9 +235,6 @@ export default function TackleBoxScreen({ navigation }) {
             />
           </TouchableOpacity>
         </View>
-        <Text style={styles.confidence}>
-          Confidence: {item.confidence || item.chatgpt_analysis?.confidence || 'N/A'}%
-        </Text>
         <Text style={styles.targetSpecies}>
           Target: {item.lure_details?.target_species?.join(', ') || 
                    item.chatgpt_analysis?.target_species?.join(', ') || 'Various'}
@@ -378,32 +375,31 @@ export default function TackleBoxScreen({ navigation }) {
             </ScrollView>
           </View>
 
-          {/* Confidence Filter */}
+          {/* Sort by Catches */}
           <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>📊 Minimum Confidence</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <TouchableOpacity
-                style={[
-                  styles.filterChip,
-                  selectedFilters.confidence === '' && styles.filterChipActive
-                ]}
-                onPress={() => setSelectedFilters({...selectedFilters, confidence: ''})}
-              >
-                <Text style={styles.filterChipText}>All</Text>
-              </TouchableOpacity>
-              {['70', '80', '90', '95'].map((confidence, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.filterChip,
-                    selectedFilters.confidence === confidence && styles.filterChipActive
-                  ]}
-                  onPress={() => setSelectedFilters({...selectedFilters, confidence})}
-                >
-                  <Text style={styles.filterChipText}>{confidence}%+</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <Text style={styles.filterLabel}>🐟 Sort</Text>
+            <TouchableOpacity
+              style={[
+                styles.sortToggle,
+                selectedFilters.sortByCatches && styles.sortToggleActive
+              ]}
+              onPress={() => setSelectedFilters({
+                ...selectedFilters,
+                sortByCatches: !selectedFilters.sortByCatches
+              })}
+            >
+              <Ionicons 
+                name={selectedFilters.sortByCatches ? "trophy" : "trophy-outline"} 
+                size={24} 
+                color={selectedFilters.sortByCatches ? "#f39c12" : "#2c3e50"} 
+              />
+              <Text style={[
+                styles.sortToggleText,
+                selectedFilters.sortByCatches && styles.sortToggleTextActive
+              ]}>
+                Show Most Catches First
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
 
@@ -732,5 +728,27 @@ const styles = StyleSheet.create({
   },
   favoritesToggleTextActive: {
     color: '#e74c3c',
+  },
+  sortToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecf0f1',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  sortToggleActive: {
+    backgroundColor: '#fef5e7',
+    borderColor: '#f39c12',
+  },
+  sortToggleText: {
+    fontSize: 16,
+    color: '#2c3e50',
+    marginLeft: 10,
+    fontWeight: '600',
+  },
+  sortToggleTextActive: {
+    color: '#f39c12',
   },
 });
