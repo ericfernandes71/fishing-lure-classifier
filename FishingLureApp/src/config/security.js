@@ -175,7 +175,7 @@ export const SecurityUtils = {
 // Environment-specific configurations
 export const ENV_CONFIG = {
   development: {
-    BACKEND_URL: 'https://corolitic-diane-unapprehending.ngrok-free.dev',
+    BACKEND_URL: 'https://fishing-lure-backend.onrender.com', // Now using production backend!
     LOG_LEVEL: 'debug',
     ENABLE_DEBUG_LOGS: true,
   },
