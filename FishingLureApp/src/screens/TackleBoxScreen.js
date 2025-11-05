@@ -12,6 +12,7 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { getTackleBox, deleteLureFromTackleBox, toggleFavorite } from '../services/storageService';
@@ -70,9 +71,9 @@ export default function TackleBoxScreen({ navigation }) {
   const applyFilters = () => {
     let filtered = lures;
 
-    // Favorites filter
+    // Favorites filter (support both Supabase and local storage field names)
     if (selectedFilters.showFavoritesOnly) {
-      filtered = filtered.filter(lure => lure.isFavorite === true);
+      filtered = filtered.filter(lure => lure.is_favorite === true || lure.isFavorite === true);
     }
 
     // Search filter
@@ -131,8 +132,55 @@ export default function TackleBoxScreen({ navigation }) {
 
   const handleToggleFavorite = async (lureId) => {
     try {
-      await toggleFavorite(lureId);
-      await loadTackleBox();
+      // Haptic feedback for instant tactile response
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      
+      // Find the lure
+      const lure = lures.find(l => l.id === lureId);
+      if (!lure) {
+        throw new Error('Lure not found');
+      }
+      
+      // OPTIMISTIC UPDATE: Update UI immediately for instant feedback
+      const newFavoriteStatus = !(lure.is_favorite || lure.isFavorite);
+      
+      // Update local state instantly
+      const updatedLures = lures.map(l => {
+        if (l.id === lureId) {
+          return {
+            ...l,
+            is_favorite: newFavoriteStatus,
+            isFavorite: newFavoriteStatus, // Support both field names
+          };
+        }
+        return l;
+      });
+      
+      setLures(updatedLures);
+      setFilteredLures(updatedLures);
+      
+      // Update database in background (don't await - let it happen async)
+      if (user && useSupabase) {
+        // Update in Supabase
+        const { updateLureAnalysis } = require('../services/supabaseService');
+        updateLureAnalysis(lureId, {
+          is_favorite: newFavoriteStatus
+        }).catch(error => {
+          // If update fails, revert the change and show error
+          console.error('Error syncing favorite to Supabase:', error);
+          loadTackleBox(); // Reload to get correct state from server
+          Alert.alert('Sync Failed', 'Could not save favorite status. Please try again.');
+        });
+      } else {
+        // Update in local storage
+        toggleFavorite(lureId).catch(error => {
+          // If update fails, revert the change
+          console.error('Error saving favorite to local storage:', error);
+          loadTackleBox();
+          Alert.alert('Error', 'Failed to update favorite status');
+        });
+      }
+      
     } catch (error) {
       if (__DEV__) {
         console.error('Error toggling favorite:', error);
@@ -229,9 +277,9 @@ export default function TackleBoxScreen({ navigation }) {
             style={styles.favoriteButton}
           >
             <Ionicons 
-              name={item.isFavorite ? "heart" : "heart-outline"} 
+              name={(item.is_favorite || item.isFavorite) ? "heart" : "heart-outline"} 
               size={24} 
-              color={item.isFavorite ? "#e74c3c" : "#95a5a6"} 
+              color={(item.is_favorite || item.isFavorite) ? "#e74c3c" : "#95a5a6"} 
             />
           </TouchableOpacity>
         </View>

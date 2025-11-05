@@ -395,6 +395,95 @@ def uploaded_file(filename):
         print(f"Error serving image {filename}: {e}")
         return jsonify({'error': 'Image not found'}), 404
 
+@app.route('/api/verify-subscription', methods=['GET'])
+def verify_subscription():
+    """Verify user subscription status (PRO or Free)"""
+    try:
+        user_id = request.args.get('user_id') or request.headers.get('X-User-ID')
+        
+        if not user_id:
+            return jsonify({'error': 'User ID required'}), 401
+        
+        if not supabase_service.is_enabled():
+            # If Supabase not enabled, treat all as free users
+            return jsonify({
+                'is_pro': False,
+                'subscription_type': 'free',
+                'message': 'Supabase not configured'
+            })
+        
+        # Check subscription status
+        subscription = supabase_service.get_user_subscription(user_id)
+        is_pro = supabase_service.is_user_pro(user_id)
+        
+        if is_pro and subscription:
+            return jsonify({
+                'is_pro': True,
+                'subscription_type': subscription.get('subscription_type'),
+                'product_identifier': subscription.get('product_identifier'),
+                'expires_at': subscription.get('expires_at'),
+                'will_renew': subscription.get('will_renew', False)
+            })
+        
+        return jsonify({
+            'is_pro': False,
+            'subscription_type': 'free'
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Subscription verification failed: {e}")
+        return jsonify({'error': 'Verification failed'}), 500
+
+@app.route('/api/check-scan-quota', methods=['GET'])
+def check_scan_quota():
+    """Check if user can scan (respects PRO status and free tier quota)"""
+    try:
+        user_id = request.args.get('user_id') or request.headers.get('X-User-ID')
+        
+        if not user_id:
+            return jsonify({'error': 'User ID required'}), 401
+        
+        if not supabase_service.is_enabled():
+            # If Supabase not enabled, allow unlimited scans
+            return jsonify({
+                'can_scan': True,
+                'reason': 'no_quota_system',
+                'unlimited': True
+            })
+        
+        # Check if user can scan
+        quota_status = supabase_service.can_user_scan(user_id)
+        
+        return jsonify(quota_status)
+        
+    except Exception as e:
+        print(f"[ERROR] Quota check failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/subscription-stats', methods=['GET'])
+def subscription_stats():
+    """Get subscription statistics (admin endpoint)"""
+    try:
+        # This should be protected with admin auth in production
+        if not supabase_service.is_enabled():
+            return jsonify({'error': 'Supabase not configured'}), 503
+        
+        # Query subscription stats view
+        response = supabase_service.client.from_('subscription_stats').select('*').execute()
+        
+        if response.data and len(response.data) > 0:
+            return jsonify(response.data[0])
+        
+        return jsonify({
+            'total_users': 0,
+            'pro_users': 0,
+            'free_users': 0
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to get stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     print("=" * 60)
     print("Mobile Lure Classifier Flask App Starting...")

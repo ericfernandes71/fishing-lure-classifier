@@ -30,13 +30,15 @@ CREATE POLICY "Users can update their own profile"
 
 -- Trigger to automatically create profile when user signs up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SECURITY DEFINER SET search_path = ''
+AS $$
 BEGIN
   INSERT INTO public.profiles (id, email, full_name)
   VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data->>'full_name');
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -142,7 +144,9 @@ CREATE POLICY "Users can delete their own lure images"
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SECURITY DEFINER SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
@@ -164,7 +168,9 @@ CREATE TRIGGER update_lure_analyses_updated_at
 -- ============================================================================
 
 -- View to get lure analyses with user information
-CREATE OR REPLACE VIEW public.lure_analyses_with_user AS
+-- Note: This view does NOT use SECURITY DEFINER to ensure RLS is properly enforced
+CREATE OR REPLACE VIEW public.lure_analyses_with_user 
+WITH (security_invoker=true) AS
 SELECT 
   la.*,
   p.email as user_email,

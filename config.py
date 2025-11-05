@@ -32,3 +32,10 @@ RESULTS_FOLDER = os.getenv("RESULTS_FOLDER", "analysis_results")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+# Validate Supabase configuration on import
+if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+    if SUPABASE_URL == "your-project-url-here" or SUPABASE_SERVICE_ROLE_KEY == "your-service-role-key-here":
+        print("[WARNING] Supabase credentials are placeholder values")
+        print("[INFO] Update your .env file with actual Supabase credentials")
+        print("[INFO] See SUPABASE_TROUBLESHOOTING.md for help")

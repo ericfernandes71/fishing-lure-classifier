@@ -5,3 +5,4 @@ python-dotenv>=1.0.0
 supabase>=2.3.0
 postgrest>=0.16.0
 gunicorn>=21.2.0
+openai>=1.0.0

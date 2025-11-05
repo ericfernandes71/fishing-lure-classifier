@@ -187,6 +187,30 @@ export const saveLureAnalysis = async (analysisData) => {
 };
 
 /**
+ * Update a lure analysis (e.g., favorite status)
+ */
+export const updateLureAnalysis = async (lureId, updates) => {
+  try {
+    const user = await getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('lure_analyses')
+      .update(updates)
+      .eq('id', lureId)
+      .eq('user_id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, lure: data };
+  } catch (error) {
+    console.error('[Supabase] Update lure analysis error:', error);
+    throw new Error(error.message || 'Failed to update lure');
+  }
+};
+
+/**
  * Get all lure analyses for current user (Tackle Box)
  * Includes catch count for each lure
  */

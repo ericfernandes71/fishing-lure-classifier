@@ -13,15 +13,32 @@ class SupabaseService:
         """Initialize Supabase client with service role key (backend only)"""
         if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
             print("[WARNING] Supabase credentials not found in config")
+            print("[INFO] To enable Supabase:")
+            print("  1. Create a .env file (copy from env_template.txt)")
+            print("  2. Add your Supabase URL and keys from https://supabase.com/dashboard")
             self.client = None
             self.enabled = False
         else:
-            self.client: Client = create_client(
-                config.SUPABASE_URL,
-                config.SUPABASE_SERVICE_ROLE_KEY
-            )
-            self.enabled = True
-            print("[OK] Supabase client initialized")
+            # Validate credentials format
+            if config.SUPABASE_URL == "your-project-url-here" or \
+               config.SUPABASE_SERVICE_ROLE_KEY == "your-service-role-key-here":
+                print("[WARNING] Supabase credentials are placeholder values")
+                print("[INFO] Please update your .env file with actual Supabase credentials")
+                self.client = None
+                self.enabled = False
+            else:
+                try:
+                    self.client: Client = create_client(
+                        config.SUPABASE_URL,
+                        config.SUPABASE_SERVICE_ROLE_KEY
+                    )
+                    self.enabled = True
+                    print("[OK] Supabase client initialized successfully")
+                except Exception as e:
+                    print(f"[ERROR] Failed to initialize Supabase client: {str(e)}")
+                    print("[INFO] Check your SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY")
+                    self.client = None
+                    self.enabled = False
     
     def is_enabled(self) -> bool:
         """Check if Supabase is properly configured"""
@@ -34,6 +51,7 @@ class SupabaseService:
     def save_lure_analysis(self, user_id: str, analysis_data: Dict) -> Optional[Dict]:
         """Save lure analysis to Supabase database"""
         if not self.is_enabled():
+            print("[WARNING] Supabase not enabled, skipping save")
             return None
         
         try:
@@ -56,12 +74,20 @@ class SupabaseService:
             return response.data[0] if response.data else None
             
         except Exception as e:
-            print(f"[ERROR] Failed to save to Supabase: {str(e)}")
+            error_msg = str(e)
+            print(f"[ERROR] Failed to save to Supabase: {error_msg}")
+            if "JWT" in error_msg or "authentication" in error_msg.lower():
+                print("[INFO] Authentication error - check your SUPABASE_SERVICE_ROLE_KEY")
+            elif "relation" in error_msg.lower() or "table" in error_msg.lower():
+                print("[INFO] Database schema error - run supabase_schema.sql in Supabase SQL Editor")
+            elif "unique" in error_msg.lower():
+                print("[INFO] Duplicate entry error - this record may already exist")
             return None
     
     def get_user_lure_analyses(self, user_id: str) -> List[Dict]:
         """Get all lure analyses for a user"""
         if not self.is_enabled():
+            print("[WARNING] Supabase not enabled, returning empty list")
             return []
         
         try:
@@ -74,7 +100,12 @@ class SupabaseService:
             return response.data if response.data else []
             
         except Exception as e:
-            print(f"[ERROR] Failed to get analyses from Supabase: {str(e)}")
+            error_msg = str(e)
+            print(f"[ERROR] Failed to get analyses from Supabase: {error_msg}")
+            if "JWT" in error_msg or "authentication" in error_msg.lower():
+                print("[INFO] Authentication error - check your SUPABASE_SERVICE_ROLE_KEY")
+            elif "relation" in error_msg.lower() or "table" in error_msg.lower():
+                print("[INFO] Database schema error - run supabase_schema.sql in Supabase SQL Editor")
             return []
     
     def get_lure_analysis_by_id(self, analysis_id: str, user_id: str) -> Optional[Dict]:
@@ -134,6 +165,7 @@ class SupabaseService:
     def upload_lure_image(self, user_id: str, file_path: str, file_name: str) -> Optional[str]:
         """Upload lure image to Supabase Storage"""
         if not self.is_enabled():
+            print("[WARNING] Supabase not enabled, skipping image upload")
             return None
         
         try:
@@ -147,7 +179,7 @@ class SupabaseService:
             self.client.storage.from_('lure-images').upload(
                 storage_path,
                 file_data,
-                file_options={"content-type": "image/jpeg"}
+                file_options={"content-type": "image/jpeg", "upsert": "true"}
             )
             
             # Get public URL
@@ -157,7 +189,15 @@ class SupabaseService:
             return public_url
             
         except Exception as e:
-            print(f"[ERROR] Failed to upload to Supabase Storage: {str(e)}")
+            error_msg = str(e)
+            print(f"[ERROR] Failed to upload to Supabase Storage: {error_msg}")
+            if "bucket" in error_msg.lower():
+                print("[INFO] Storage bucket error - create 'lure-images' bucket in Supabase Storage")
+                print("[INFO] Run the storage policies from supabase_schema.sql")
+            elif "policy" in error_msg.lower() or "permission" in error_msg.lower():
+                print("[INFO] Permission error - check storage policies in Supabase")
+            elif "JWT" in error_msg or "authentication" in error_msg.lower():
+                print("[INFO] Authentication error - check your SUPABASE_SERVICE_ROLE_KEY")
             return None
     
     def delete_lure_image(self, storage_path: str) -> bool:
@@ -213,6 +253,113 @@ class SupabaseService:
         except Exception as e:
             print(f"[ERROR] Failed to update profile: {str(e)}")
             return False
+    
+    # ========================================================================
+    # SUBSCRIPTION MANAGEMENT
+    # ========================================================================
+    
+    def get_user_subscription(self, user_id: str) -> Optional[Dict]:
+        """Get user subscription status"""
+        if not self.is_enabled():
+            return None
+        
+        try:
+            response = self.client.table('user_subscriptions')\
+                .select('*')\
+                .eq('user_id', user_id)\
+                .single()\
+                .execute()
+            
+            return response.data if response.data else None
+            
+        except Exception as e:
+            # User might not have a subscription record yet
+            if "JSON object requested, multiple" not in str(e) and "No rows found" not in str(e):
+                print(f"[ERROR] Failed to get subscription: {str(e)}")
+            return None
+    
+    def is_user_pro(self, user_id: str) -> bool:
+        """Check if user has active PRO subscription"""
+        subscription = self.get_user_subscription(user_id)
+        
+        if not subscription or not subscription.get('is_pro'):
+            return False
+        
+        # Check expiration for non-lifetime subscriptions
+        if subscription.get('expires_at'):
+            from datetime import datetime
+            expires = datetime.fromisoformat(subscription['expires_at'].replace('Z', '+00:00'))
+            if expires < datetime.now(expires.tzinfo):
+                return False
+        
+        return True
+    
+    def get_monthly_scan_count(self, user_id: str) -> int:
+        """Get number of scans this month for user"""
+        if not self.is_enabled():
+            return 0
+        
+        try:
+            from datetime import datetime
+            # Get start of current month
+            now = datetime.now()
+            start_of_month = datetime(now.year, now.month, 1)
+            
+            response = self.client.table('lure_analyses')\
+                .select('id', count='exact')\
+                .eq('user_id', user_id)\
+                .gte('created_at', start_of_month.isoformat())\
+                .execute()
+            
+            return response.count if response.count else 0
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to get scan count: {str(e)}")
+            return 0
+    
+    def can_user_scan(self, user_id: str, free_tier_limit: int = 10) -> Dict:
+        """Check if user can perform a scan (PRO or has quota)"""
+        # Check if PRO user
+        if self.is_user_pro(user_id):
+            return {
+                'can_scan': True,
+                'is_pro': True,
+                'reason': 'pro',
+                'unlimited': True
+            }
+        
+        # Check free tier quota
+        scan_count = self.get_monthly_scan_count(user_id)
+        remaining = max(0, free_tier_limit - scan_count)
+        
+        if remaining > 0:
+            return {
+                'can_scan': True,
+                'is_pro': False,
+                'reason': 'free_quota',
+                'used': scan_count,
+                'remaining': remaining,
+                'limit': free_tier_limit
+            }
+        else:
+            from datetime import datetime
+            from calendar import monthrange
+            
+            # Calculate reset date (first day of next month)
+            now = datetime.now()
+            if now.month == 12:
+                reset_date = datetime(now.year + 1, 1, 1)
+            else:
+                reset_date = datetime(now.year, now.month + 1, 1)
+            
+            return {
+                'can_scan': False,
+                'is_pro': False,
+                'reason': 'quota_exceeded',
+                'used': scan_count,
+                'limit': free_tier_limit,
+                'reset_date': reset_date.isoformat()
+            }
 
 # Global Supabase service instance
 supabase_service = SupabaseService()
