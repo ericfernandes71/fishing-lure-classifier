@@ -370,33 +370,52 @@ export const getMonthlyQuota = async () => {
  * Get quota status for display in UI
  */
 export const getQuotaStatus = async () => {
-  const status = await getSubscriptionStatus();
-  
-  if (status.isPro) {
+  try {
+    const status = await getSubscriptionStatus();
+    
+    if (status.isPro) {
+      return {
+        isPro: true,
+        unlimited: true,
+        message: '∞ Unlimited scans',
+        emoji: '🎣'
+      };
+    }
+    
+    const quota = await getMonthlyQuota();
+    
+    // Debug logging
+    console.log('[Subscriptions] getQuotaStatus - quota data:', quota);
+    
+    const resetDate = new Date(quota.resetDate);
+    const daysUntilReset = Math.ceil((resetDate - new Date()) / (1000 * 60 * 60 * 24));
+    
     return {
-      isPro: true,
-      unlimited: true,
-      message: '∞ Unlimited scans',
-      emoji: '🎣'
+      isPro: false,
+      unlimited: false,
+      used: quota.used,
+      remaining: quota.remaining,
+      limit: quota.limit,
+      resetDate: quota.resetDate,
+      daysUntilReset,
+      message: `${quota.remaining} scan${quota.remaining !== 1 ? 's' : ''} remaining`,
+      subtitle: `Resets in ${daysUntilReset} day${daysUntilReset !== 1 ? 's' : ''}`,
+      emoji: quota.remaining > 5 ? '✅' : quota.remaining > 0 ? '⚠️' : '🚫'
+    };
+  } catch (error) {
+    console.error('[Subscriptions] getQuotaStatus error:', error);
+    // Return safe error state
+    return {
+      isPro: false,
+      unlimited: false,
+      used: 0,
+      remaining: 0,
+      limit: FREE_TIER_LIMIT,
+      message: '⚠️ Could not load quota',
+      subtitle: 'Please check your connection',
+      emoji: '⚠️'
     };
   }
-  
-  const quota = await getMonthlyQuota();
-  const resetDate = new Date(quota.resetDate);
-  const daysUntilReset = Math.ceil((resetDate - new Date()) / (1000 * 60 * 60 * 24));
-  
-  return {
-    isPro: false,
-    unlimited: false,
-    used: quota.used,
-    remaining: quota.remaining,
-    limit: quota.limit,
-    resetDate: quota.resetDate,
-    daysUntilReset,
-    message: `${quota.remaining} scan${quota.remaining !== 1 ? 's' : ''} remaining`,
-    subtitle: `Resets in ${daysUntilReset} day${daysUntilReset !== 1 ? 's' : ''}`,
-    emoji: quota.remaining > 5 ? '✅' : quota.remaining > 0 ? '⚠️' : '🚫'
-  };
 };
 
 // ============================================================================
