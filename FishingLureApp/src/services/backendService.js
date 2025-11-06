@@ -3,11 +3,8 @@ import { supabase } from '../config/supabase';
 import { Platform } from 'react-native';
 
 // Configuration - Use environment variables for security
-// For local development, use your computer's IP from the network
-// For production, use your deployed URL
-export const BACKEND_URL = __DEV__ 
-  ? 'http://10.0.0.245:5000'  // Your computer's local IP (works for emulator and physical device)
-  : 'https://fishing-lure-backend.onrender.com'; // Production
+// Using production backend (Render) - always available
+export const BACKEND_URL = 'https://fishing-lure-backend.onrender.com';
 
 console.log('[BackendService] Using backend URL:', BACKEND_URL);
 
