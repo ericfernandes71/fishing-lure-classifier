@@ -83,6 +83,7 @@ Run these SQL files in Supabase SQL Editor (in order):
 2. supabase_subscriptions_schema.sql -- Subscription tracking
 3. supabase_security_patch.sql       -- Security fixes
 4. supabase_add_favorites.sql        -- Favorites feature
+5. supabase_soft_delete.sql          -- Soft delete (prevents quota abuse)
 ```
 
 ### 4. Run Backend

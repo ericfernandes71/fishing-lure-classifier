@@ -91,7 +91,7 @@ class SupabaseService:
             return None
     
     def get_user_lure_analyses(self, user_id: str) -> List[Dict]:
-        """Get all lure analyses for a user"""
+        """Get all lure analyses for a user (excludes soft-deleted)"""
         if not self.is_enabled():
             print("[WARNING] Supabase not enabled, returning empty list")
             return []
@@ -100,6 +100,7 @@ class SupabaseService:
             response = self.client.table('lure_analyses')\
                 .select('*')\
                 .eq('user_id', user_id)\
+                .is_('deleted_at', 'null')\
                 .order('created_at', desc=True)\
                 .execute()
             
@@ -134,18 +135,22 @@ class SupabaseService:
             return None
     
     def delete_lure_analysis(self, analysis_id: str, user_id: str) -> bool:
-        """Delete a lure analysis"""
+        """Soft delete a lure analysis (marks as deleted, doesn't remove)"""
         if not self.is_enabled():
             return False
         
         try:
+            from datetime import datetime
+            
+            # Soft delete - set deleted_at instead of actually deleting
+            # This ensures deleted lures still count toward quota
             self.client.table('lure_analyses')\
-                .delete()\
+                .update({'deleted_at': datetime.now().isoformat()})\
                 .eq('id', analysis_id)\
                 .eq('user_id', user_id)\
                 .execute()
             
-            print(f"[OK] Deleted lure analysis {analysis_id}")
+            print(f"[OK] Soft deleted lure analysis {analysis_id}")
             return True
             
         except Exception as e:

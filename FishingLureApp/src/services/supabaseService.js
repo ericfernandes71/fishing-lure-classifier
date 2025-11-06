@@ -219,11 +219,12 @@ export const getUserLureAnalyses = async () => {
     const user = await getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    // Get all lure analyses
+    // Get all lure analyses (excluding soft-deleted ones)
     const { data: lures, error } = await supabase
       .from('lure_analyses')
       .select('*')
       .eq('user_id', user.id)
+      .is('deleted_at', null)  // Only get non-deleted lures
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -288,13 +289,16 @@ export const deleteLureAnalysis = async (analysisId) => {
     const user = await getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
+    // SOFT DELETE: Mark as deleted instead of actually deleting
+    // This prevents users from gaming the quota system by deleting lures
     const { error } = await supabase
       .from('lure_analyses')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', analysisId)
       .eq('user_id', user.id);
 
     if (error) throw error;
+    console.log('[Supabase] ✓ Soft deleted lure (still counts toward quota)');
     return { success: true };
   } catch (error) {
     console.error('[Supabase] Delete analysis error:', error);
