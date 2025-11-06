@@ -55,10 +55,16 @@ class SupabaseService:
             return None
         
         try:
+            # Ensure required fields have values (can't be None)
+            lure_type = analysis_data.get('lure_type') or 'Unknown'
+            confidence = analysis_data.get('confidence')
+            if confidence is None:
+                confidence = 0
+            
             data_to_insert = {
                 'user_id': user_id,
-                'lure_type': analysis_data.get('lure_type'),
-                'confidence': analysis_data.get('confidence'),
+                'lure_type': lure_type,  # Required field, default to 'Unknown'
+                'confidence': confidence,
                 'image_url': analysis_data.get('image_url'),
                 'image_name': analysis_data.get('image_name'),
                 'image_path': analysis_data.get('image_path'),

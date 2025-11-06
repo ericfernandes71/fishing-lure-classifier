@@ -63,6 +63,19 @@ def upload_file():
             
             print(f"[INFO] File uploaded: {filename}")
             
+            # Check quota BEFORE analyzing (count all attempts, not just successful ones)
+            user_id = request.form.get('user_id') or request.headers.get('X-User-ID')
+            
+            if user_id and supabase_service.is_enabled():
+                quota_check = supabase_service.can_user_scan(user_id)
+                if not quota_check.get('can_scan'):
+                    print(f"[WARNING] User {user_id} exceeded quota")
+                    return jsonify({
+                        'error': 'quota_exceeded',
+                        'message': 'You have used all your free scans this month. Upgrade to PRO for unlimited scans!',
+                        'quota': quota_check
+                    }), 403
+            
             # Check if classifier is available
             if not mobile_classifier:
                 return jsonify({'error': 'Lure classifier not initialized. Please set up your API key in config.py first.'})
@@ -71,27 +84,37 @@ def upload_file():
             print("[INFO] Starting lure analysis...")
             results = mobile_classifier.analyze_lure(filepath)
             
-            if 'error' in results:
-                print(f"[ERROR] Analysis failed: {results['error']}")
-                return jsonify({'error': results['error']})
-            
-            # Save results to JSON file with image path
+            # Always add image info to results
             results['image_path'] = filepath
             results['image_name'] = filename
+            
+            # Handle analysis errors - still save to count toward quota
+            if 'error' in results:
+                print(f"[ERROR] Analysis failed: {results['error']}")
+                # Set defaults for failed analysis so it still counts toward quota
+                results['lure_type'] = 'Analysis Failed'
+                results['confidence'] = 0
+                results['analysis_method'] = 'ChatGPT Vision API (Failed)'
+            
+            # Save results to JSON file
             json_file = mobile_classifier.save_analysis_to_json(results)
             results['json_file'] = json_file
             
             # Save to Supabase if user_id is provided and Supabase is enabled
-            user_id = request.form.get('user_id') or request.headers.get('X-User-ID')
-            
+            # This counts ALL attempts toward quota, not just successful ones
             if user_id and supabase_service.is_enabled():
                 try:
+                    # Verify we have minimum required data before saving
+                    if not results.get('lure_type'):
+                        print(f"[WARNING] No lure_type in results, setting to 'Unknown'")
+                        results['lure_type'] = 'Unknown'
+                    
                     # Upload image to Supabase Storage
                     image_url = supabase_service.upload_lure_image(user_id, filepath, filename)
                     if image_url:
                         results['image_url'] = image_url
                     
-                    # Save analysis to Supabase database
+                    # Save analysis to Supabase database (counts toward quota)
                     supabase_result = supabase_service.save_lure_analysis(user_id, results)
                     if supabase_result:
                         results['supabase_id'] = supabase_result.get('id')

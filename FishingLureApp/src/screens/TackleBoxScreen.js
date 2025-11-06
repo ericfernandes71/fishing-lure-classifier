@@ -224,9 +224,31 @@ export default function TackleBoxScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteLureFromTackleBox(id);
-              await loadTackleBox();
-              Alert.alert('Success', 'Lure deleted from tackle box');
+              // Haptic feedback
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              
+              // OPTIMISTIC UPDATE: Remove from UI immediately
+              const updatedLures = lures.filter(lure => lure.id !== id);
+              setLures(updatedLures);
+              setFilteredLures(filteredLures.filter(lure => lure.id !== id));
+              
+              // Delete from correct data source in background
+              if (user && useSupabase) {
+                // Delete from Supabase
+                deleteLureAnalysis(id).catch(error => {
+                  // If delete fails, reload to restore
+                  console.error('Error deleting from Supabase:', error);
+                  loadTackleBox();
+                  Alert.alert('Delete Failed', 'Could not delete lure. Please try again.');
+                });
+              } else {
+                // Delete from local storage
+                deleteLureFromTackleBox(id).catch(error => {
+                  console.error('Error deleting from local storage:', error);
+                  loadTackleBox();
+                  Alert.alert('Error', 'Failed to delete lure');
+                });
+              }
             } catch (error) {
               if (__DEV__) {
                 console.error('Error deleting lure:', error);

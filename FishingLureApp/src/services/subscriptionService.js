@@ -5,7 +5,7 @@
 
 import Purchases from 'react-native-purchases';
 import { Platform } from 'react-native';
-import { supabase } from './supabaseService';
+import { supabase, getCurrentUser } from './supabaseService';
 
 // ============================================================================
 // CONFIGURATION
@@ -72,6 +72,7 @@ export const initializeSubscriptions = async (userId) => {
  */
 export const getSubscriptionStatus = async () => {
   try {
+    // Check if RevenueCat is configured
     const customerInfo = await Purchases.getCustomerInfo();
     
     // Check if user has active PRO entitlement
@@ -91,12 +92,36 @@ export const getSubscriptionStatus = async () => {
       periodType: entitlement?.periodType || null,
     };
   } catch (error) {
-    console.error('[Subscriptions] Get status error:', error);
-    return { 
-      isPro: false, 
-      isLifetime: false,
-      error: error.message 
-    };
+    // If RevenueCat not configured yet, check Supabase instead
+    console.warn('[Subscriptions] RevenueCat not configured, checking Supabase');
+    
+    try {
+      // Fallback to Supabase subscription status
+      const user = await getCurrentUser();
+      if (!user) {
+        return { isPro: false, isLifetime: false };
+      }
+      
+      const { data, error: supabaseError } = await supabase
+        .from('user_subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (supabaseError || !data) {
+        return { isPro: false, isLifetime: false };
+      }
+      
+      return {
+        isPro: data.is_pro || false,
+        isLifetime: data.subscription_type === 'lifetime',
+        productIdentifier: data.product_identifier,
+        expirationDate: data.expires_at,
+      };
+    } catch (fallbackError) {
+      console.error('[Subscriptions] Fallback error:', fallbackError);
+      return { isPro: false, isLifetime: false };
+    }
   }
 };
 
@@ -277,8 +302,16 @@ export const canUserScan = async () => {
  */
 export const getMonthlyQuota = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCurrentUser();
+    if (!user) {
+      console.warn('[Subscriptions] No user authenticated');
+      return { 
+        used: 0, 
+        remaining: FREE_TIER_LIMIT, 
+        limit: FREE_TIER_LIMIT,
+        resetDate: new Date().toISOString()
+      };
+    }
     
     // Calculate start of current month
     const now = new Date();
@@ -291,13 +324,23 @@ export const getMonthlyQuota = async () => {
       .eq('user_id', user.id)
       .gte('created_at', startOfMonth.toISOString());
     
-    if (error) throw error;
+    if (error) {
+      console.warn('[Subscriptions] Quota query error:', error);
+      return { 
+        used: 0, 
+        remaining: FREE_TIER_LIMIT, 
+        limit: FREE_TIER_LIMIT,
+        resetDate: new Date().toISOString()
+      };
+    }
     
     const used = data?.length || 0;
     const remaining = Math.max(0, FREE_TIER_LIMIT - used);
     
     // Calculate reset date (first day of next month)
     const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    
+    console.log(`[Subscriptions] Quota: ${used}/${FREE_TIER_LIMIT} used, ${remaining} remaining`);
     
     return { 
       used, 

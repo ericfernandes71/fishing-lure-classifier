@@ -13,17 +13,39 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Camera } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { analyzeLure } from '../services/lureAnalysisService';
 import { saveLureToTackleBox } from '../services/storageService';
 import { saveLureAnalysis } from '../services/supabaseService';
+import { getQuotaStatus } from '../services/subscriptionService';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function HomeScreen() {
   const { user } = useAuth();
+  const navigation = useNavigation();
   const [selectedImage, setSelectedImage] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [quotaStatus, setQuotaStatus] = useState(null);
+
+  // Load quota status when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      loadQuotaStatus();
+    }, [user])
+  );
+  
+  const loadQuotaStatus = async () => {
+    if (user) {
+      try {
+        const status = await getQuotaStatus();
+        setQuotaStatus(status);
+      } catch (error) {
+        console.error('Failed to load quota:', error);
+      }
+    }
+  };
 
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -89,6 +111,11 @@ export default function HomeScreen() {
         timestamp: new Date().toISOString(),
       });
       
+      // Refresh quota status after successful scan
+      if (user) {
+        loadQuotaStatus(); // Update counter immediately
+      }
+      
       // Also save to Supabase if user is logged in
       if (user && result.supabase_id) {
         console.log('[HomeScreen] Analysis already saved to Supabase by backend');
@@ -110,7 +137,25 @@ export default function HomeScreen() {
       if (__DEV__) {
         console.error('Analysis error:', error);
       }
-      Alert.alert('Error', 'Failed to analyze lure. Please try again.');
+      
+      // Check if it's a quota exceeded error
+      if (error.code === 'QUOTA_EXCEEDED') {
+        Alert.alert(
+          '🎣 Free Scans Used Up!',
+          "You've used all 10 free scans this month. Upgrade to PRO for unlimited scans!",
+          [
+            { text: 'Maybe Later', style: 'cancel' },
+            { 
+              text: 'Upgrade to PRO', 
+              onPress: () => navigation.navigate('Paywall', {
+                message: "You've used all 10 free scans this month!"
+              })
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Failed to analyze lure. Please try again.');
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -126,6 +171,30 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>🎣 Mobile Lure Classifier</Text>
         <Text style={styles.subtitle}>AI-Powered Fishing Lure Identification</Text>
+        
+        {/* Quota Display */}
+        {user && quotaStatus && !quotaStatus.unlimited && (
+          <View style={styles.quotaCard}>
+            <Text style={styles.quotaText}>
+              {quotaStatus.emoji} {quotaStatus.message}
+            </Text>
+            <Text style={styles.quotaSubtext}>{quotaStatus.subtitle}</Text>
+            {quotaStatus.remaining <= 3 && quotaStatus.remaining > 0 && (
+              <TouchableOpacity
+                style={styles.miniUpgradeButton}
+                onPress={() => navigation.navigate('Paywall')}
+              >
+                <Text style={styles.miniUpgradeText}>Upgrade to PRO →</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+        
+        {user && quotaStatus && quotaStatus.unlimited && (
+          <View style={styles.proCard}>
+            <Text style={styles.proText}>💎 PRO - Unlimited Scans</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.uploadSection}>
@@ -230,6 +299,49 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#bdc3c7',
+  },
+  quotaCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  quotaText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  quotaSubtext: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  miniUpgradeButton: {
+    backgroundColor: '#fff',
+    padding: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  miniUpgradeText: {
+    color: '#2c3e50',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  proCard: {
+    backgroundColor: 'rgba(255, 215, 0, 0.25)',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.4)',
+    alignItems: 'center',
+  },
+  proText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   uploadSection: {
     padding: 20,

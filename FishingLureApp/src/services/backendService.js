@@ -79,7 +79,16 @@ export const analyzeLureWithBackend = async (imageUri) => {
       throw new Error('Cannot connect to server. Please make sure your Flask server is running and accessible.');
     } else if (error.response) {
       const status = error.response.status;
-      const message = error.response.data?.error || 'Server error occurred';
+      const data = error.response.data;
+      const message = data?.error || data?.message || 'Server error occurred';
+      
+      // Handle quota exceeded (403) - this should trigger paywall
+      if (status === 403 && data?.error === 'quota_exceeded') {
+        const quotaError = new Error(data.message);
+        quotaError.code = 'QUOTA_EXCEEDED';
+        quotaError.quota = data.quota;
+        throw quotaError;
+      }
       
       if (status === 500) {
         throw new Error('Server error. Please check your API configuration.');
