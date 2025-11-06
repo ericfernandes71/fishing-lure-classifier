@@ -166,6 +166,20 @@ export default function HomeScreen() {
       
       // Check if it's a quota exceeded error
       if (error.code === 'QUOTA_EXCEEDED') {
+        // Update quota to show 0 remaining
+        if (user) {
+          setQuotaStatus({
+            isPro: false,
+            unlimited: false,
+            used: 10,
+            remaining: 0,
+            limit: 10,
+            message: '🚫 0 scans remaining',
+            subtitle: 'Upgrade to PRO for unlimited scans',
+            emoji: '🚫'
+          });
+        }
+        
         Alert.alert(
           '🎣 Free Scans Used Up!',
           "You've used all 10 free scans this month. Upgrade to PRO for unlimited scans!",

@@ -16,10 +16,32 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import LureDetailScreen from './src/screens/LureDetailScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
+import PaywallScreen from './src/screens/PaywallScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 const AuthStack = createStackNavigator();
+const HomeStack = createStackNavigator();
+
+function HomeStackScreen() {
+  return (
+    <HomeStack.Navigator>
+      <HomeStack.Screen 
+        name="HomeMain" 
+        component={HomeScreen} 
+        options={{ headerShown: false }}
+      />
+      <HomeStack.Screen 
+        name="Paywall" 
+        component={PaywallScreen} 
+        options={{ 
+          title: 'Upgrade to PRO',
+          presentation: 'modal'
+        }}
+      />
+    </HomeStack.Navigator>
+  );
+}
 
 function TackleBoxStack() {
   return (
@@ -33,6 +55,14 @@ function TackleBoxStack() {
         name="LureDetail" 
         component={LureDetailScreen} 
         options={{ title: '🎣 Lure Details' }}
+      />
+      <Stack.Screen 
+        name="Paywall" 
+        component={PaywallScreen} 
+        options={{ 
+          title: 'Upgrade to PRO',
+          presentation: 'modal'
+        }}
       />
     </Stack.Navigator>
   );
@@ -79,8 +109,8 @@ function MainTabNavigator() {
     >
       <Tab.Screen 
         name="Home" 
-        component={HomeScreen} 
-        options={{ title: '🎣 Lure Analyzer' }}
+        component={HomeStackScreen} 
+        options={{ title: '🎣 Lure Analyzer', headerShown: false }}
       />
       <Tab.Screen 
         name="TackleBox" 
