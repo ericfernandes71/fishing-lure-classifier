@@ -318,11 +318,16 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#2c3e50',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
@@ -330,6 +335,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#2c3e50',
     padding: 20,
+    paddingTop: 10,
     alignItems: 'center',
   },
   title: {
