@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
+  SafeAreaView,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -207,8 +208,9 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
         <Text style={styles.title}>🎣 Mobile Lure Classifier</Text>
         <Text style={styles.subtitle}>AI-Powered Fishing Lure Identification</Text>
         
