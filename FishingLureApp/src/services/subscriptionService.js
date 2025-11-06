@@ -5,7 +5,9 @@
 
 import Purchases from 'react-native-purchases';
 import { Platform } from 'react-native';
-import { supabase, getCurrentUser } from './supabaseService';
+import { getCurrentUser } from './supabaseService';
+import axios from 'axios';
+import { BACKEND_URL } from './backendService'; // Use same backend URL
 
 // ============================================================================
 // CONFIGURATION
@@ -92,34 +94,31 @@ export const getSubscriptionStatus = async () => {
       periodType: entitlement?.periodType || null,
     };
   } catch (error) {
-    // If RevenueCat not configured yet, check Supabase instead
-    console.warn('[Subscriptions] RevenueCat not configured, checking Supabase');
+    // If RevenueCat not configured yet, check backend API instead
+    console.warn('[Subscriptions] RevenueCat not configured, checking backend');
     
     try {
-      // Fallback to Supabase subscription status
       const user = await getCurrentUser();
       if (!user) {
         return { isPro: false, isLifetime: false };
       }
       
-      const { data, error: supabaseError } = await supabase
-        .from('user_subscriptions')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      // Use backend API to check subscription status
+      const response = await axios.get(`${BACKEND_URL}/api/verify-subscription`, {
+        params: { user_id: user.id },
+        timeout: 5000,
+      });
       
-      if (supabaseError || !data) {
-        return { isPro: false, isLifetime: false };
-      }
+      const subscription = response.data;
       
       return {
-        isPro: data.is_pro || false,
-        isLifetime: data.subscription_type === 'lifetime',
-        productIdentifier: data.product_identifier,
-        expirationDate: data.expires_at,
+        isPro: subscription.is_pro || false,
+        isLifetime: subscription.subscription_type === 'lifetime',
+        productIdentifier: subscription.product_identifier,
+        expirationDate: subscription.expires_at,
       };
     } catch (fallbackError) {
-      console.error('[Subscriptions] Fallback error:', fallbackError);
+      console.warn('[Subscriptions] Backend check failed, assuming free tier');
       return { isPro: false, isLifetime: false };
     }
   }
@@ -313,41 +312,48 @@ export const getMonthlyQuota = async () => {
       };
     }
     
-    // Calculate start of current month
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    
-    // Get scans this month from Supabase
-    const { data, error } = await supabase
-      .from('lure_analyses')
-      .select('id')
-      .eq('user_id', user.id)
-      .gte('created_at', startOfMonth.toISOString());
-    
-    if (error) {
-      console.warn('[Subscriptions] Quota query error:', error);
-      return { 
-        used: 0, 
-        remaining: FREE_TIER_LIMIT, 
+    // Use backend API to check quota (more reliable than direct Supabase query)
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/check-scan-quota`, {
+        params: { user_id: user.id },
+        timeout: 5000,
+      });
+      
+      const quota = response.data;
+      
+      if (quota.is_pro || quota.unlimited) {
+        // PRO user
+        return {
+          used: 0,
+          remaining: 999,
+          limit: 999,
+          resetDate: null,
+          isPro: true,
+        };
+      }
+      
+      // Free user
+      const now = new Date();
+      const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      
+      console.log(`[Subscriptions] Quota from backend: ${quota.used}/${quota.limit || 10} used`);
+      
+      return {
+        used: quota.used || 0,
+        remaining: quota.remaining || FREE_TIER_LIMIT,
+        limit: quota.limit || FREE_TIER_LIMIT,
+        resetDate: quota.reset_date || resetDate.toISOString(),
+      };
+    } catch (backendError) {
+      console.warn('[Subscriptions] Backend quota check failed, returning defaults:', backendError.message);
+      // Return safe defaults if backend is unreachable
+      return {
+        used: 0,
+        remaining: FREE_TIER_LIMIT,
         limit: FREE_TIER_LIMIT,
         resetDate: new Date().toISOString()
       };
     }
-    
-    const used = data?.length || 0;
-    const remaining = Math.max(0, FREE_TIER_LIMIT - used);
-    
-    // Calculate reset date (first day of next month)
-    const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    
-    console.log(`[Subscriptions] Quota: ${used}/${FREE_TIER_LIMIT} used, ${remaining} remaining`);
-    
-    return { 
-      used, 
-      remaining, 
-      limit: FREE_TIER_LIMIT, 
-      resetDate: resetDate.toISOString()
-    };
   } catch (error) {
     console.error('[Subscriptions] Quota check error:', error);
     // Return safe defaults on error

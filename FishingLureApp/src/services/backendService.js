@@ -1,8 +1,17 @@
 import axios from 'axios';
 import { supabase } from '../config/supabase';
+import { Platform } from 'react-native';
 
 // Configuration - Use environment variables for security
-const BACKEND_URL = 'https://fishing-lure-backend.onrender.com'; // Production backend - always available!
+// For local development, use localhost/10.0.2.2
+// For production, use your deployed URL
+export const BACKEND_URL = __DEV__ 
+  ? (Platform.OS === 'android' 
+      ? 'http://10.0.2.2:5000'  // Android emulator
+      : 'http://localhost:5000') // iOS simulator or web
+  : 'https://fishing-lure-backend.onrender.com'; // Production
+
+console.log('[BackendService] Using backend URL:', BACKEND_URL);
 
 // Helper to get current user ID
 const getCurrentUserId = async () => {
