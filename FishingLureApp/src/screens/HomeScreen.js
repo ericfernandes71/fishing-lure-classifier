@@ -11,6 +11,7 @@ import {
   Modal,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Camera } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -46,6 +47,27 @@ export default function HomeScreen() {
       }
     }
   };
+  
+  const compressImage = async (imageUri) => {
+    try {
+      console.log('[HomeScreen] Compressing image...');
+      const manipResult = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [
+          { resize: { width: 1200 } }, // Resize to max 1200px width (maintains aspect ratio)
+        ],
+        { 
+          compress: 0.7,  // 70% quality (good balance of quality vs size)
+          format: ImageManipulator.SaveFormat.JPEG 
+        }
+      );
+      console.log('[HomeScreen] ✓ Image compressed');
+      return manipResult.uri;
+    } catch (error) {
+      console.warn('[HomeScreen] Compression failed, using original:', error);
+      return imageUri; // Return original if compression fails
+    }
+  };
 
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -67,8 +89,10 @@ export default function HomeScreen() {
       quality: 0.8,
     });
 
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0]);
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      // Compress image before setting
+      const compressedUri = await compressImage(result.assets[0].uri);
+      setSelectedImage({ ...result.assets[0], uri: compressedUri });
       setAnalysisResult(null);
     }
   };
@@ -87,8 +111,10 @@ export default function HomeScreen() {
       quality: 0.8,
     });
 
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0]);
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      // Compress image before setting
+      const compressedUri = await compressImage(result.assets[0].uri);
+      setSelectedImage({ ...result.assets[0], uri: compressedUri });
       setAnalysisResult(null);
     }
   };

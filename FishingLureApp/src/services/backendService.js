@@ -3,12 +3,10 @@ import { supabase } from '../config/supabase';
 import { Platform } from 'react-native';
 
 // Configuration - Use environment variables for security
-// For local development, use localhost/10.0.2.2
+// For local development, use your computer's IP from the network
 // For production, use your deployed URL
 export const BACKEND_URL = __DEV__ 
-  ? (Platform.OS === 'android' 
-      ? 'http://10.0.2.2:5000'  // Android emulator
-      : 'http://localhost:5000') // iOS simulator or web
+  ? 'http://10.0.0.245:5000'  // Your computer's local IP (works for emulator and physical device)
   : 'https://fishing-lure-backend.onrender.com'; // Production
 
 console.log('[BackendService] Using backend URL:', BACKEND_URL);
@@ -73,7 +71,7 @@ export const analyzeLureWithBackend = async (imageUri) => {
         'Content-Type': 'multipart/form-data',
         ...(userId && { 'X-User-ID': userId }), // Include user ID in headers
       },
-      timeout: 60000, // 60 second timeout for analysis
+      timeout: 120000, // 2 minute timeout (OpenAI can be slow sometimes)
     });
 
     return apiResponse.data;
