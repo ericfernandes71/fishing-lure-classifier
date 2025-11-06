@@ -332,16 +332,20 @@ export const getMonthlyQuota = async () => {
         };
       }
       
-      // Free user
+      // Free user - calculate remaining from used and limit
       const now = new Date();
       const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       
-      console.log(`[Subscriptions] Quota from backend: ${quota.used}/${quota.limit || 10} used`);
+      const used = quota.used || 0;
+      const limit = quota.limit || FREE_TIER_LIMIT;
+      const remaining = Math.max(0, limit - used); // Calculate remaining properly
+      
+      console.log(`[Subscriptions] Quota from backend: ${used}/${limit} used, ${remaining} remaining`);
       
       return {
-        used: quota.used || 0,
-        remaining: quota.remaining || FREE_TIER_LIMIT,
-        limit: quota.limit || FREE_TIER_LIMIT,
+        used,
+        remaining,
+        limit,
         resetDate: quota.reset_date || resetDate.toISOString(),
       };
     } catch (backendError) {
