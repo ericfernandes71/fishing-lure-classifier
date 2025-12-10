@@ -1,0 +1,5 @@
+# Don't ignore package.json
+!package.json
+!app.json
+!node_modules/
+
