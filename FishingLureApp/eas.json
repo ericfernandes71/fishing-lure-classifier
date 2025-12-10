@@ -1,19 +1,18 @@
 {
   "cli": {
-    "version": ">= 5.9.1"
+    "version": ">= 5.9.1",
+    "requireCommit": true
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "workingDirectory": "FishingLureApp"
+      "distribution": "internal"
     },
     "preview": {
       "distribution": "internal",
       "ios": {
         "simulator": true
-      },
-      "workingDirectory": "FishingLureApp"
+      }
     },
     "production": {
       "ios": {
@@ -21,15 +20,13 @@
       },
       "android": {
         "buildType": "apk"
-      },
-      "workingDirectory": "FishingLureApp"
+      }
     },
     "production-ios": {
       "ios": {
         "buildConfiguration": "Release"
       },
-      "distribution": "store",
-      "workingDirectory": "FishingLureApp"
+      "distribution": "store"
     }
   },
   "submit": {
