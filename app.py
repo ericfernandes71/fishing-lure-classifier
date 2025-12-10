@@ -523,8 +523,8 @@ def subscription_stats():
         if not supabase_service.is_enabled():
             return jsonify({'error': 'Supabase not configured'}), 503
         
-        # Query subscription stats view
-        response = supabase_service.client.from_('subscription_stats').select('*').execute()
+        # Query subscription stats using the function (replaces the view)
+        response = supabase_service.client.rpc('get_subscription_stats').execute()
         
         if response.data and len(response.data) > 0:
             return jsonify(response.data[0])
