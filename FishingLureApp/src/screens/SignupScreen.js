@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -60,9 +61,13 @@ export default function SignupScreen({ navigation }) {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
-          <Text style={styles.logo}>🎣</Text>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join the fishing community</Text>
+          <Image 
+            source={require('../../assets/icon.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.title}>My Tackle Box</Text>
+          <Text style={styles.subtitle}>Create your account to get started</Text>
         </View>
 
         <View style={styles.form}>
@@ -157,7 +162,8 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logo: {
-    fontSize: 80,
+    width: 100,
+    height: 100,
     marginBottom: 20,
   },
   title: {
