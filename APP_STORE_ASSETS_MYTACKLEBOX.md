@@ -2,7 +2,8 @@
 
 ## App Information
 
-**App Name:** MyTackleBox  
+**App Name:** My Tackle Box (with spaces for App Store)  
+**Internal Name:** MyTackleBox (for app.json - stays as one word)  
 **Subtitle (iOS):** AI Lure ID & Catch Tracker  
 **Category:** Sports  
 **Age Rating:** 4+ (Everyone)
@@ -15,9 +16,9 @@
 
 #### App Name
 ```
-MyTackleBox
+My Tackle Box
 ```
-(30 characters max - ✅ 11 characters)
+(30 characters max - ✅ 15 characters - more readable with spaces)
 
 #### Subtitle (iOS only - 30 chars max)
 ```
@@ -33,9 +34,9 @@ The ultimate fishing companion! Identify any lure with AI, track your catches, a
 #### Description (4000 chars max)
 
 ```
-🎣 MYTACKLEBOX - YOUR DIGITAL FISHING COMPANION
+🎣 MY TACKLE BOX - YOUR DIGITAL FISHING COMPANION
 
-Transform your fishing experience with MyTackleBox, the all-in-one app that combines AI-powered lure identification with comprehensive catch tracking and tackle box management.
+Transform your fishing experience with My Tackle Box, the all-in-one app that combines AI-powered lure identification with comprehensive catch tracking and tackle box management.
 
 ✨ KEY FEATURES
 
@@ -86,19 +87,19 @@ FREE TIER:
 • Basic tackle box features
 • Limited catch tracking
 
-PRO MONTHLY - $4.99/month:
+PRO MONTHLY - $9.99/month:
 • Unlimited lure identifications
 • Full catch tracking with photos
 • Advanced tackle box features
 • Priority support
 • All premium features
 
-PRO YEARLY - $39.99/year:
+PRO YEARLY - $79.99/year:
 • Save 33% vs monthly
 • All PRO features
 • Best value for serious anglers
 
-LIFETIME - $49.99:
+LIFETIME - $99.99:
 • One-time payment
 • All features forever
 • No recurring charges
@@ -137,8 +138,9 @@ fishing,lure,tackle,box,bass,fish,identify,AI,catch,tracker,angler,bait,tacklebo
 
 #### App Name
 ```
-MyTackleBox
+My Tackle Box
 ```
+(More readable with spaces - what users will see)
 
 #### Short Description (80 chars max)
 ```
@@ -149,9 +151,9 @@ AI-powered fishing lure identification and catch tracking for anglers
 #### Full Description (4000 chars max)
 
 ```
-🎣 MYTACKLEBOX - YOUR DIGITAL FISHING COMPANION
+🎣 MY TACKLE BOX - YOUR DIGITAL FISHING COMPANION
 
-Transform your fishing experience with MyTackleBox, the all-in-one app that combines AI-powered lure identification with comprehensive catch tracking and tackle box management.
+Transform your fishing experience with My Tackle Box, the all-in-one app that combines AI-powered lure identification with comprehensive catch tracking and tackle box management.
 
 ✨ KEY FEATURES
 
@@ -202,19 +204,19 @@ FREE TIER:
 • Basic tackle box features
 • Limited catch tracking
 
-PRO MONTHLY - $4.99/month:
+PRO MONTHLY - $9.99/month:
 • Unlimited lure identifications
 • Full catch tracking with photos
 • Advanced tackle box features
 • Priority support
 • All premium features
 
-PRO YEARLY - $39.99/year:
+PRO YEARLY - $79.99/year:
 • Save 33% vs monthly
 • All PRO features
 • Best value for serious anglers
 
-LIFETIME - $49.99:
+LIFETIME - $99.99:
 • One-time payment
 • All features forever
 • No recurring charges
