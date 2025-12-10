@@ -10,21 +10,50 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { testBackendConnection } from '../services/backendService';
 import { useAuth } from '../contexts/AuthContext';
+import { getSubscriptionInfo, syncSubscription, openSubscriptionManagement } from '../services/subscriptionService';
 
 export default function SettingsScreen() {
   const [autoSave, setAutoSave] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [backendStatus, setBackendStatus] = useState(null);
   const [isCheckingBackend, setIsCheckingBackend] = useState(false);
+  const [subscriptionInfo, setSubscriptionInfo] = useState(null);
   const { user, signOut } = useAuth();
+  const navigation = useNavigation();
 
   useEffect(() => {
     loadSettings();
     // Check backend connection silently in background
     checkBackendConnection();
+    loadSubscriptionInfo();
   }, []);
+
+  // Refresh subscription info when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadSubscriptionInfo();
+    }, [])
+  );
+
+  const loadSubscriptionInfo = async () => {
+    try {
+      // Force refresh to get latest subscription data from RevenueCat
+      const info = await getSubscriptionInfo(true);
+      setSubscriptionInfo(info);
+      // Sync to Supabase after getting fresh data
+      await syncSubscription();
+      if (__DEV__) {
+        console.log('[Settings] Subscription info loaded:', info);
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.error('Error loading subscription info:', error);
+      }
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -43,12 +72,18 @@ export default function SettingsScreen() {
   const checkBackendConnection = async () => {
     setIsCheckingBackend(true);
     try {
-      console.log('[Settings] Testing backend connection...');
+      if (__DEV__) {
+        console.log('[Settings] Testing backend connection...');
+      }
       const result = await testBackendConnection();
-      console.log('[Settings] Backend test result:', result);
+      if (__DEV__) {
+        console.log('[Settings] Backend test result:', result);
+      }
       setBackendStatus(result);
     } catch (error) {
-      console.error('[Settings] Backend connection error:', error);
+      if (__DEV__) {
+        console.error('[Settings] Backend connection error:', error);
+      }
       setBackendStatus({ 
         connected: false, 
         error: 'Connection test failed: ' + error.message 
@@ -80,7 +115,6 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               await AsyncStorage.clear();
-              setApiKey('');
               setAutoSave(true);
               setNotifications(true);
               Alert.alert('Success', 'All data cleared');
@@ -119,11 +153,6 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>⚙️ Settings</Text>
-        <Text style={styles.subtitle}>Configure your app preferences</Text>
-      </View>
-
       {/* User Profile Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>👤 Account</Text>
@@ -137,6 +166,58 @@ export default function SettingsScreen() {
           <View style={styles.userDetails}>
             <Text style={styles.userName}>{user?.user_metadata?.full_name || 'User'}</Text>
             <Text style={styles.userEmail}>{user?.email}</Text>
+            {subscriptionInfo && (
+              <>
+                <TouchableOpacity 
+                  style={styles.membershipBadge}
+                  onPress={() => navigation.navigate('Paywall')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.membershipText}>
+                    {subscriptionInfo.badge || (subscriptionInfo.isPro ? 'PRO' : 'Free')}
+                  </Text>
+                  <Text style={styles.membershipDescription}>
+                    {subscriptionInfo.description}
+                  </Text>
+                  {subscriptionInfo.isPro && (
+                    <Text style={styles.membershipAction}>Tap to manage subscription →</Text>
+                  )}
+                  {!subscriptionInfo.isPro && (
+                    <Text style={styles.membershipAction}>Tap to upgrade →</Text>
+                  )}
+                </TouchableOpacity>
+                
+                {/* Cancel Subscription Button - Only show for recurring subscriptions (not lifetime) */}
+                {subscriptionInfo.isPro && 
+                 subscriptionInfo.badge !== 'Lifetime' && 
+                 subscriptionInfo.willRenew !== false && (
+                  <TouchableOpacity 
+                    style={styles.cancelSubscriptionButton}
+                    onPress={async () => {
+                      Alert.alert(
+                        'Cancel Subscription',
+                        'This will open your device\'s subscription management page where you can cancel your subscription.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Open Settings',
+                            onPress: async () => {
+                              const result = await openSubscriptionManagement();
+                              if (!result.success) {
+                                Alert.alert('Error', result.error || 'Could not open subscription management');
+                              }
+                            }
+                          }
+                        ]
+                      );
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cancelSubscriptionText}>Cancel Subscription</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
           </View>
         </View>
 
@@ -369,6 +450,46 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 14,
     color: '#7f8c8d',
+    marginBottom: 8,
+  },
+  membershipBadge: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#27AE60',
+  },
+  membershipText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1A237E',
+    marginBottom: 2,
+  },
+  membershipDescription: {
+    fontSize: 12,
+    color: '#27AE60',
+    marginBottom: 4,
+  },
+  membershipAction: {
+    fontSize: 11,
+    color: '#4A90E2',
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  cancelSubscriptionButton: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FF9800',
+    alignItems: 'center',
+  },
+  cancelSubscriptionText: {
+    fontSize: 14,
+    color: '#E65100',
+    fontWeight: '600',
   },
   logoutButton: {
     backgroundColor: '#e74c3c',

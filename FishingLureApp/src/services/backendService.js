@@ -6,7 +6,9 @@ import { Platform } from 'react-native';
 // Using production backend (Render) - always available
 export const BACKEND_URL = 'https://fishing-lure-backend.onrender.com';
 
+if (__DEV__) {
 console.log('[BackendService] Using backend URL:', BACKEND_URL);
+}
 
 // Helper to get current user ID
 const getCurrentUserId = async () => {
@@ -197,19 +199,25 @@ export const deleteLureFromBackend = async (lureId) => {
 // Helper function to test backend connection
 export const testBackendConnection = async () => {
   try {
+    if (__DEV__) {
     console.log('[BackendService] Testing connection to:', BACKEND_URL);
+    }
     const response = await axios.get(`${BACKEND_URL}/health`, {
       timeout: 10000, // 10 seconds should be enough for a simple JSON response
     });
+    if (__DEV__) {
     console.log('[BackendService] Connection successful! Response:', response.data);
+    }
     return { 
       connected: true, 
       status: response.status,
       message: response.data.message 
     };
   } catch (error) {
+    if (__DEV__) {
     console.error('[BackendService] Connection failed:', error.message);
     console.error('[BackendService] Error details:', error);
+    }
     return { 
       connected: false, 
       error: error.message,

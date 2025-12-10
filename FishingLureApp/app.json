@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Fishing Lure Analyzer",
+    "name": "MyTackleBox",
     "slug": "fishing-lure-analyzer",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -44,7 +44,8 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -66,7 +67,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "your-project-id-here"
+        "projectId": "0d80e90f-7dd9-4210-b6b4-d1fb3e8cc6af"
       }
     }
   }

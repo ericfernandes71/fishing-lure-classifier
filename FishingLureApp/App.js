@@ -49,12 +49,32 @@ function TackleBoxStack() {
       <Stack.Screen 
         name="TackleBoxList" 
         component={TackleBoxScreen} 
-        options={{ title: '🎒 My Tackle Box' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen 
         name="LureDetail" 
         component={LureDetailScreen} 
         options={{ title: '🎣 Lure Details' }}
+      />
+      <Stack.Screen 
+        name="Paywall" 
+        component={PaywallScreen} 
+        options={{ 
+          title: 'Upgrade to PRO',
+          presentation: 'modal'
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+function SettingsStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="SettingsMain" 
+        component={SettingsScreen} 
+        options={{ title: 'Settings' }}
       />
       <Stack.Screen 
         name="Paywall" 
@@ -83,7 +103,7 @@ function MainTabNavigator() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarIcon: ({ focused, color }) => {
           let iconName;
 
           if (route.name === 'Home') {
@@ -94,33 +114,69 @@ function MainTabNavigator() {
             iconName = focused ? 'settings' : 'settings-outline';
           }
 
-          return <Ionicons name={iconName} size={size} color={color} />;
+          return <Ionicons name={iconName} size={28} color={color} />;
         },
-        tabBarActiveTintColor: '#3498db',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: '#4A90E2',
+        tabBarInactiveTintColor: '#95A5A6',
+        tabBarLabelStyle: {
+          fontSize: 13,
+          fontWeight: '600',
+          marginTop: 2,
+          marginBottom: 4,
+        },
+        tabBarStyle: {
+          height: 80,
+          paddingBottom: 8,
+          paddingTop: 10,
+          borderTopWidth: 1,
+          borderTopColor: '#E0E0E0',
+          backgroundColor: '#FFFFFF',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 8,
+        },
         headerStyle: {
-          backgroundColor: '#2c3e50',
+          backgroundColor: '#FFFFFF',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 4,
         },
-        headerTintColor: '#fff',
+        headerTintColor: '#1A237E',
         headerTitleStyle: {
           fontWeight: 'bold',
+          fontSize: 18,
         },
       })}
     >
       <Tab.Screen 
         name="Home" 
         component={HomeStackScreen} 
-        options={{ title: '🎣 Lure Analyzer', headerShown: false }}
+        options={{ 
+          title: 'Lure Analyzer',
+          headerShown: false,
+          tabBarLabel: 'Lure Analyzer',
+        }}
       />
       <Tab.Screen 
         name="TackleBox" 
         component={TackleBoxStack} 
-        options={{ title: '🎒 Tackle Box' }}
+        options={{ 
+          title: 'My Tackle Box',
+          tabBarLabel: 'Tackle Box',
+        }}
       />
       <Tab.Screen 
         name="Settings" 
-        component={SettingsScreen} 
-        options={{ title: '⚙️ Settings' }}
+        component={SettingsStack} 
+        options={{ 
+          title: 'Settings',
+          tabBarLabel: 'Settings',
+          headerShown: false,
+        }}
       />
     </Tab.Navigator>
   );

@@ -5,6 +5,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../config/supabase';
 import { getCurrentUser, signIn, signUp, signOut } from '../services/supabaseService';
+import { initializeSubscriptions } from '../services/subscriptionService';
 
 const AuthContext = createContext({});
 
@@ -23,9 +24,22 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      const user = session?.user ?? null;
+      setUser(user);
+      
+      // Initialize RevenueCat if user is already logged in
+      if (user) {
+        try {
+          console.log('[Auth] Initializing RevenueCat for existing user:', user.id);
+          await initializeSubscriptions(user.id);
+        } catch (error) {
+          console.warn('[Auth] RevenueCat initialization failed:', error);
+          // Don't block app if RevenueCat fails
+        }
+      }
+      
       setLoading(false);
     });
 
@@ -34,7 +48,20 @@ export const AuthProvider = ({ children }) => {
       async (event, session) => {
         console.log('[Auth] Auth state changed:', event);
         setSession(session);
-        setUser(session?.user ?? null);
+        const newUser = session?.user ?? null;
+        setUser(newUser);
+        
+        // Initialize RevenueCat when user logs in
+        if (newUser && event === 'SIGNED_IN') {
+          try {
+            console.log('[Auth] Initializing RevenueCat for user:', newUser.id);
+            await initializeSubscriptions(newUser.id);
+          } catch (error) {
+            console.warn('[Auth] RevenueCat initialization failed:', error);
+            // Don't block app if RevenueCat fails
+          }
+        }
+        
         setLoading(false);
       }
     );

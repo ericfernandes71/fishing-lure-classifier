@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,10 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
-  Modal,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Camera } from 'expo-camera';
@@ -22,14 +23,45 @@ import { saveLureAnalysis } from '../services/supabaseService';
 import { getQuotaStatus } from '../services/subscriptionService';
 import { useAuth } from '../contexts/AuthContext';
 
+// Lure of the Day data - rotates daily
+const LURE_OF_THE_DAY = [
+  {
+    name: 'Silver Spoon',
+    tip: 'Perfect for trolling in clear water. The reflective surface mimics baitfish scales.',
+  },
+  {
+    name: 'Jig Head',
+    tip: 'Versatile lure that works in all conditions. Try different colors based on water clarity.',
+  },
+  {
+    name: 'Crankbait',
+    tip: 'Excellent for covering large areas. Use a steady retrieve to create a wobbling action.',
+  },
+  {
+    name: 'Soft Plastic Worm',
+    tip: 'Deadly for bass fishing. Use a slow, dragging retrieve along the bottom.',
+  },
+  {
+    name: 'Topwater Popper',
+    tip: 'Best used during early morning or evening. Create a "pop" sound to attract fish.',
+  },
+];
+
+// Get today's lure based on day of year
+const getLureOfTheDay = () => {
+  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  return LURE_OF_THE_DAY[dayOfYear % LURE_OF_THE_DAY.length];
+};
+
 export default function HomeScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
   const [selectedImage, setSelectedImage] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
   const [quotaStatus, setQuotaStatus] = useState(null);
+  
+  const lureOfTheDay = useMemo(() => getLureOfTheDay(), []);
 
   // Load quota status when screen is focused
   useFocusEffect(
@@ -44,29 +76,37 @@ export default function HomeScreen() {
         const status = await getQuotaStatus();
         setQuotaStatus(status);
       } catch (error) {
+        if (__DEV__) {
         console.error('Failed to load quota:', error);
+        }
       }
     }
   };
   
   const compressImage = async (imageUri) => {
     try {
+      if (__DEV__) {
       console.log('[HomeScreen] Compressing image...');
+      }
       const manipResult = await ImageManipulator.manipulateAsync(
         imageUri,
         [
-          { resize: { width: 1200 } }, // Resize to max 1200px width (maintains aspect ratio)
+          { resize: { width: 1200 } },
         ],
         { 
-          compress: 0.7,  // 70% quality (good balance of quality vs size)
+          compress: 0.7,
           format: ImageManipulator.SaveFormat.JPEG 
         }
       );
+      if (__DEV__) {
       console.log('[HomeScreen] ✓ Image compressed');
+      }
       return manipResult.uri;
     } catch (error) {
+      if (__DEV__) {
       console.warn('[HomeScreen] Compression failed, using original:', error);
-      return imageUri; // Return original if compression fails
+      }
+      return imageUri;
     }
   };
 
@@ -91,7 +131,6 @@ export default function HomeScreen() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      // Compress image before setting
       const compressedUri = await compressImage(result.assets[0].uri);
       setSelectedImage({ ...result.assets[0], uri: compressedUri });
       setAnalysisResult(null);
@@ -113,7 +152,6 @@ export default function HomeScreen() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      // Compress image before setting
       const compressedUri = await compressImage(result.assets[0].uri);
       setSelectedImage({ ...result.assets[0], uri: compressedUri });
       setAnalysisResult(null);
@@ -131,30 +169,32 @@ export default function HomeScreen() {
       const result = await analyzeLure(selectedImage.uri);
       setAnalysisResult(result);
       
-      // Save to local tackle box (backwards compatibility)
       await saveLureToTackleBox({
         imageUri: selectedImage.uri,
         analysis: result,
         timestamp: new Date().toISOString(),
       });
       
-      // Refresh quota status after successful scan
       if (user) {
-        loadQuotaStatus(); // Update counter immediately
+        loadQuotaStatus();
       }
       
-      // Also save to Supabase if user is logged in
       if (user && result.supabase_id) {
+        if (__DEV__) {
         console.log('[HomeScreen] Analysis already saved to Supabase by backend');
+        }
         Alert.alert('Success', 'Lure analyzed and saved to your cloud tackle box! ☁️');
       } else if (user) {
-        // Try to save to Supabase if backend didn't do it
         try {
           await saveLureAnalysis(result);
+          if (__DEV__) {
           console.log('[HomeScreen] Saved to Supabase from mobile app');
+          }
           Alert.alert('Success', 'Lure analyzed and saved to your cloud tackle box! ☁️');
         } catch (supabaseError) {
+          if (__DEV__) {
           console.log('[HomeScreen] Supabase save failed, using local only');
+          }
           Alert.alert('Success', 'Lure analyzed and saved locally!');
         }
       } else {
@@ -165,9 +205,7 @@ export default function HomeScreen() {
         console.error('Analysis error:', error);
       }
       
-      // Check if it's a quota exceeded error
       if (error.code === 'QUOTA_EXCEEDED') {
-        // Update quota to show 0 remaining
         if (user) {
           setQuotaStatus({
             isPro: false,
@@ -207,71 +245,120 @@ export default function HomeScreen() {
     setAnalysisResult(null);
   };
 
+  const isPro = quotaStatus?.isPro || quotaStatus?.unlimited;
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container}>
-        <View style={styles.header}>
-        <Text style={styles.title}>🎣 Mobile Lure Classifier</Text>
-        <Text style={styles.subtitle}>AI-Powered Fishing Lure Identification</Text>
-        
-        {/* Quota Display */}
-        {user && quotaStatus && !quotaStatus.unlimited && (
-          <View style={styles.quotaCard}>
-            <Text style={styles.quotaText}>
-              {quotaStatus.emoji} {quotaStatus.message}
-            </Text>
-            <Text style={styles.quotaSubtext}>{quotaStatus.subtitle}</Text>
-            {quotaStatus.remaining <= 3 && quotaStatus.remaining > 0 && (
+      <LinearGradient
+        colors={['#E3F2FD', '#FFFFFF']}
+        style={styles.gradient}
+      >
+        <ScrollView 
+          style={styles.container}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Hero Section */}
+          <View style={styles.heroSection}>
+            <Image 
+              source={require('../../assets/icon.png')} 
+              style={styles.appIcon}
+              resizeMode="contain"
+            />
+            <Text style={styles.heroTitle}>My Tackle Box</Text>
+            <Text style={styles.heroSubtitle}>Identify Any Lure Instantly</Text>
+          </View>
+
+          {/* PRO Upgrade Card */}
+          {!isPro && (
               <TouchableOpacity
-                style={styles.miniUpgradeButton}
+              style={styles.proCard}
                 onPress={() => navigation.navigate('Paywall')}
-              >
-                <Text style={styles.miniUpgradeText}>Upgrade to PRO →</Text>
+              activeOpacity={0.8}
+            >
+              <Ionicons name="star" size={24} color="#FFB800" style={styles.proStarIcon} />
+              <View style={styles.proCardContent}>
+                <Text style={styles.proCardTitle}>PRO Upgrade</Text>
+                <Text style={styles.proCardSubtitle}>Unlock Unlimited Scans & Premium Database</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#666" />
               </TouchableOpacity>
             )}
-          </View>
-        )}
-        
-        {user && quotaStatus && quotaStatus.unlimited && (
-          <View style={styles.proCard}>
-            <Text style={styles.proText}>💎 PRO - Unlimited Scans</Text>
-          </View>
-        )}
+
+          {/* Lure of the Day Card */}
+          <View style={styles.lureOfDayCard}>
+            <Text style={styles.lureOfDayTitle}>Lure of the Day</Text>
+            <Text style={styles.lureOfDayName}>{lureOfTheDay.name}</Text>
+            <Text style={styles.lureOfDayTip}>{lureOfTheDay.tip}</Text>
       </View>
 
-      <View style={styles.uploadSection}>
+          {/* Action Buttons */}
         {!selectedImage ? (
-          <View style={styles.uploadButtons}>
-            <TouchableOpacity style={styles.button} onPress={pickImage}>
-              <Text style={styles.buttonText}>📸 Choose from Gallery</Text>
+            <View style={styles.actionButtonsContainer}>
+              <TouchableOpacity 
+                style={styles.primaryButton}
+                onPress={pickImage}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={['#4A90E2', '#357ABD']}
+                  style={styles.buttonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="images" size={24} color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>Choose from Gallery</Text>
+                </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={takePicture}>
-              <Text style={styles.buttonText}>📷 Take Photo</Text>
+
+              <TouchableOpacity 
+                style={styles.primaryButton}
+                onPress={takePicture}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={['#4A90E2', '#357ABD']}
+                  style={styles.buttonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="camera" size={24} color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>Take Photo</Text>
+                </LinearGradient>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.imageContainer}>
             <Image source={{ uri: selectedImage.uri }} style={styles.image} />
             <View style={styles.imageActions}>
-              <TouchableOpacity style={styles.actionButton} onPress={resetSelection}>
-                <Text style={styles.actionButtonText}>🔄 Change Image</Text>
+                <TouchableOpacity 
+                  style={styles.secondaryButton} 
+                  onPress={resetSelection}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="refresh" size={20} color="#4A90E2" />
+                  <Text style={styles.secondaryButtonText}>Change Image</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.actionButton, styles.analyzeButton]} 
+                  style={styles.analyzeButton} 
                 onPress={analyzeImage}
                 disabled={isAnalyzing}
+                  activeOpacity={0.8}
               >
                 {isAnalyzing ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.analyzeButtonText}>🔍 Analyze Lure</Text>
+                    <>
+                      <Ionicons name="search" size={20} color="#FFFFFF" />
+                      <Text style={styles.analyzeButtonText}>Analyze Lure</Text>
+                    </>
                 )}
               </TouchableOpacity>
             </View>
           </View>
         )}
-      </View>
 
+          {/* Analysis Results */}
       {analysisResult && (
         <View style={styles.resultsSection}>
           <Text style={styles.resultsTitle}>Analysis Results</Text>
@@ -308,212 +395,291 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Scan Next Lure Button */}
           <TouchableOpacity 
             style={styles.scanNextButton} 
             onPress={resetSelection}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={['#4A90E2', '#357ABD']}
+                  style={styles.scanNextGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
           >
-            <Ionicons name="camera" size={24} color="white" />
-            <Text style={styles.scanNextButtonText}>📸 Scan Next Lure</Text>
+                  <Ionicons name="camera" size={24} color="#FFFFFF" />
+                  <Text style={styles.scanNextButtonText}>Scan Next Lure</Text>
+                </LinearGradient>
           </TouchableOpacity>
         </View>
       )}
       </ScrollView>
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
+const { width } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#2c3e50',
+    backgroundColor: '#E3F2FD',
+  },
+  gradient: {
+    flex: 1,
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
-  header: {
-    backgroundColor: '#2c3e50',
-    padding: 20,
-    paddingTop: 10,
+  scrollContent: {
+    paddingBottom: 30,
+  },
+  heroSection: {
     alignItems: 'center',
+    paddingTop: 40,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
   },
-  title: {
-    fontSize: 24,
+  appIcon: {
+    width: 80,
+    height: 80,
+    marginBottom: 16,
+    borderRadius: 20,
+  },
+  heroTitle: {
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 5,
+    color: '#1A237E',
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#bdc3c7',
-  },
-  quotaCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  quotaText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  quotaSubtext: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  miniUpgradeButton: {
-    backgroundColor: '#fff',
-    padding: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    marginTop: 8,
-  },
-  miniUpgradeText: {
-    color: '#2c3e50',
-    fontSize: 12,
-    fontWeight: 'bold',
+  heroSubtitle: {
+    fontSize: 18,
+    color: '#5C6BC0',
+    textAlign: 'center',
+    fontWeight: '500',
   },
   proCard: {
-    backgroundColor: 'rgba(255, 215, 0, 0.25)',
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.4)',
-    alignItems: 'center',
-  },
-  proText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  uploadSection: {
+    backgroundColor: '#FFF7E6',
+    borderRadius: 22,
     padding: 20,
-  },
-  uploadButtons: {
-    gap: 15,
-  },
-  button: {
-    backgroundColor: '#3498db',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  imageContainer: {
-    alignItems: 'center',
-  },
-  image: {
-    width: 300,
-    height: 300,
-    borderRadius: 10,
+    marginHorizontal: 20,
     marginBottom: 20,
-  },
-  imageActions: {
     flexDirection: 'row',
-    gap: 10,
-  },
-  actionButton: {
-    backgroundColor: '#95a5a6',
-    padding: 10,
-    borderRadius: 8,
-    flex: 1,
     alignItems: 'center',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  analyzeButton: {
-    backgroundColor: '#27ae60',
-  },
-  analyzeButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  resultsSection: {
-    padding: 20,
-  },
-  resultsTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#2c3e50',
-  },
-  resultCard: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  proStarIcon: {
+    marginRight: 12,
+  },
+  proCardContent: {
+    flex: 1,
+  },
+  proCardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1A237E',
+    marginBottom: 4,
+  },
+  proCardSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  lureOfDayCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginHorizontal: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  lureOfDayTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5C6BC0',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  lureOfDayName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1A237E',
+    marginBottom: 8,
+  },
+  lureOfDayTip: {
+    fontSize: 15,
+    color: '#666',
+    lineHeight: 22,
+  },
+  actionButtonsContainer: {
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  primaryButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  buttonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  imageContainer: {
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  image: {
+    width: width - 40,
+    height: width - 40,
+    borderRadius: 20,
+    marginBottom: 20,
+    backgroundColor: '#F5F5F5',
+  },
+  imageActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  secondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#4A90E2',
+    borderRadius: 18,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  secondaryButtonText: {
+    color: '#4A90E2',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  analyzeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#27AE60',
+    borderRadius: 18,
+    paddingVertical: 16,
+    gap: 8,
+    shadowColor: '#27AE60',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  analyzeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  resultsSection: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  resultsTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1A237E',
+    marginBottom: 16,
+  },
+  resultCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   lureType: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 5,
+    color: '#1A237E',
+    marginBottom: 8,
   },
   confidence: {
     fontSize: 16,
-    color: '#27ae60',
-    fontWeight: 'bold',
+    color: '#27AE60',
+    fontWeight: '600',
   },
   detailsCard: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   detailsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 10,
+    color: '#1A237E',
+    marginBottom: 12,
   },
   detailsText: {
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 8,
-    lineHeight: 20,
+    fontSize: 15,
+    color: '#666',
+    marginBottom: 10,
+    lineHeight: 22,
   },
   bold: {
     fontWeight: 'bold',
+    color: '#1A237E',
   },
   scanNextButton: {
-    backgroundColor: '#3498db',
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginTop: 8,
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  scanNextGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    gap: 12,
   },
   scanNextButtonText: {
-    color: 'white',
+    color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 8,
+    fontWeight: '600',
   },
 });

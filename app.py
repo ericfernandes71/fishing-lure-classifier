@@ -45,6 +45,38 @@ def health():
         'timestamp': datetime.datetime.now().isoformat()
     })
 
+@app.route('/keep-alive')
+def keep_alive():
+    """Keep Supabase database active by making a simple query"""
+    try:
+        if supabase_service.is_enabled():
+            # Make a simple query to keep database active
+            # This prevents Supabase free tier from pausing after 7 days
+            response = supabase_service.client.table('lure_analyses').select('id').limit(1).execute()
+            return jsonify({
+                'status': 'ok',
+                'message': 'Supabase database is active',
+                'supabase': 'connected',
+                'timestamp': datetime.datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                'status': 'ok',
+                'message': 'Backend is running (Supabase not enabled)',
+                'supabase': 'disabled',
+                'timestamp': datetime.datetime.now().isoformat()
+            })
+    except Exception as e:
+        # Even if query fails, return ok - this endpoint should always succeed
+        # to keep the cron job happy
+        return jsonify({
+            'status': 'ok',
+            'message': 'Keep-alive ping received',
+            'supabase': 'error',
+            'error': str(e),
+            'timestamp': datetime.datetime.now().isoformat()
+        })
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:

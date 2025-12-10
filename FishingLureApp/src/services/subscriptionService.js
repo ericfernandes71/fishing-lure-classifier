@@ -4,8 +4,9 @@
  */
 
 import Purchases from 'react-native-purchases';
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import { getCurrentUser } from './supabaseService';
+import { supabase } from '../config/supabase';
 import axios from 'axios';
 import { BACKEND_URL } from './backendService'; // Use same backend URL
 
@@ -14,19 +15,43 @@ import { BACKEND_URL } from './backendService'; // Use same backend URL
 // ============================================================================
 
 // RevenueCat API Keys
-// Get these from: https://app.revenuecat.com/
-const REVENUECAT_API_KEY_IOS = 'appl_YOUR_IOS_KEY_HERE';
-const REVENUECAT_API_KEY_ANDROID = 'goog_YOUR_ANDROID_KEY_HERE';
+// Get these from: https://app.revenuecat.com/ → Project Settings → API Keys
+// Test key for Expo Go (development)
+const REVENUECAT_API_KEY_TEST = 'test_dUUNiOeOwXcEMWFAsvnVGrKkMvp';
+// Production iOS key - Connected to App Store Connect (for production builds only)
+const REVENUECAT_API_KEY_IOS_PRODUCTION = 'appl_pgNgDazBFRrUubpNYcmYQqCNvPh';
+// Production Android key - Update when Google Play is set up
+const REVENUECAT_API_KEY_ANDROID_PRODUCTION = 'test_dUUNiOeOwXcEMWFAsvnVGrKkMvp'; // Still using test key
 
-// Product IDs (must match App Store Connect / Google Play Console)
-export const PRODUCT_IDS = {
-  MONTHLY: 'fishing_lure_pro_monthly',
-  YEARLY: 'fishing_lure_pro_yearly',
-  LIFETIME: 'fishing_lure_lifetime',
+// Determine which key to use based on environment
+// In Expo Go, we must use test key. In production builds, use production keys.
+const getApiKey = () => {
+  // Check if we're in Expo Go (development environment)
+  // Production keys don't work in Expo Go, so always use test key in development
+  if (__DEV__) {
+    return {
+      ios: REVENUECAT_API_KEY_TEST,
+      android: REVENUECAT_API_KEY_TEST,
+    };
+  }
+  
+  // In production builds, use production keys
+  return {
+    ios: REVENUECAT_API_KEY_IOS_PRODUCTION,
+    android: REVENUECAT_API_KEY_ANDROID_PRODUCTION,
+  };
 };
 
-// Entitlement ID (set in RevenueCat dashboard)
-const ENTITLEMENT_ID = 'pro';
+// Product IDs (must match App Store Connect product identifiers exactly)
+// Updated to match App Store Connect Product IDs
+export const PRODUCT_IDS = {
+  MONTHLY: 'monthly_pro',
+  YEARLY: 'yearly_pro',
+  LIFETIME: 'lifetime_pro',
+};
+
+// Entitlement ID (set in RevenueCat dashboard) - Must match RevenueCat identifier exactly!
+const ENTITLEMENT_ID = 'MyTackleBox Pro'; // Updated to match RevenueCat dashboard
 
 // Free tier limits
 const FREE_TIER_LIMIT = 10; // scans per month
@@ -41,9 +66,21 @@ const FREE_TIER_LIMIT = 10; // scans per month
  */
 export const initializeSubscriptions = async (userId) => {
   try {
+    const keys = getApiKey();
     const apiKey = Platform.OS === 'ios' 
-      ? REVENUECAT_API_KEY_IOS 
-      : REVENUECAT_API_KEY_ANDROID;
+      ? keys.ios 
+      : keys.android;
+    
+    // Check if already configured to avoid re-initialization errors
+    try {
+      await Purchases.getCustomerInfo();
+      if (__DEV__) {
+        console.log('[Subscriptions] Already configured, skipping initialization');
+      }
+      return { success: true };
+    } catch (notConfiguredError) {
+      // Not configured yet, proceed with configuration
+    }
     
     // Configure RevenueCat with user ID
     await Purchases.configure({ 
@@ -60,6 +97,7 @@ export const initializeSubscriptions = async (userId) => {
     return { success: true };
   } catch (error) {
     console.error('[Subscriptions] ✗ Init error:', error);
+    // Don't fail completely - subscription features will just use fallback
     return { success: false, error: error.message };
   }
 };
@@ -69,17 +107,102 @@ export const initializeSubscriptions = async (userId) => {
 // ============================================================================
 
 /**
+ * Refresh customer info from RevenueCat server
+ * Forces a fresh fetch to get latest subscription data
+ */
+export const refreshCustomerInfo = async () => {
+  try {
+    // Restore purchases to force refresh from server
+    const customerInfo = await Purchases.restorePurchases();
+    return customerInfo;
+  } catch (error) {
+    // If restore fails, try regular getCustomerInfo
+    console.warn('[Subscriptions] Restore failed, using getCustomerInfo:', error);
+    return await Purchases.getCustomerInfo();
+  }
+};
+
+/**
  * Get current subscription status
  * Returns whether user has PRO access and details
+ * Prioritizes recurring subscriptions (monthly/yearly) over lifetime when both exist
  */
-export const getSubscriptionStatus = async () => {
+export const getSubscriptionStatus = async (forceRefresh = false) => {
   try {
     // Check if RevenueCat is configured
-    const customerInfo = await Purchases.getCustomerInfo();
+    let customerInfo;
+    if (forceRefresh) {
+      customerInfo = await refreshCustomerInfo();
+    } else {
+      customerInfo = await Purchases.getCustomerInfo();
+    }
     
     // Check if user has active PRO entitlement
     const isPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
-    const entitlement = customerInfo.entitlements.active[ENTITLEMENT_ID];
+    
+    // Get all purchased product identifiers to see what user has
+    const allPurchasedProducts = customerInfo.allPurchasedProductIdentifiers || [];
+    
+    // Check active subscriptions (recurring subscriptions that are currently active)
+    const activeSubscriptions = customerInfo.activeSubscriptions || {};
+    
+    if (__DEV__) {
+      console.log('[Subscriptions] All purchased products:', allPurchasedProducts);
+      console.log('[Subscriptions] Active subscriptions:', Object.keys(activeSubscriptions));
+      console.log('[Subscriptions] Active entitlements:', Object.keys(customerInfo.entitlements.active));
+    }
+    
+    // Check if user has an active recurring subscription (monthly or yearly)
+    const hasActiveMonthly = activeSubscriptions[PRODUCT_IDS.MONTHLY] !== undefined;
+    const hasActiveYearly = activeSubscriptions[PRODUCT_IDS.YEARLY] !== undefined;
+    const hasLifetime = allPurchasedProducts.includes(PRODUCT_IDS.LIFETIME);
+    
+    // Get the entitlement object (RevenueCat returns one entitlement, might be lifetime)
+    let entitlement = customerInfo.entitlements.active[ENTITLEMENT_ID];
+    
+    // If user has an active recurring subscription AND lifetime, prioritize the recurring one
+    // This shows what they're currently paying for, not just what grants access
+    if (entitlement && (hasActiveMonthly || hasActiveYearly)) {
+      // Check if the active subscription is actually granting the entitlement
+      // If monthly/yearly is active, use that product identifier even if entitlement shows lifetime
+      if (hasActiveMonthly) {
+        // Create a synthetic entitlement object for monthly
+        const monthlySubscription = activeSubscriptions[PRODUCT_IDS.MONTHLY];
+        entitlement = {
+          productIdentifier: PRODUCT_IDS.MONTHLY,
+          willRenew: true,
+          expirationDate: monthlySubscription.expirationDate || null,
+          periodType: 'MONTH',
+        };
+        if (__DEV__) {
+          console.log('[Subscriptions] Overriding with active monthly subscription');
+        }
+      } else if (hasActiveYearly) {
+        // Create a synthetic entitlement object for yearly
+        const yearlySubscription = activeSubscriptions[PRODUCT_IDS.YEARLY];
+        entitlement = {
+          productIdentifier: PRODUCT_IDS.YEARLY,
+          willRenew: true,
+          expirationDate: yearlySubscription.expirationDate || null,
+          periodType: 'YEAR',
+        };
+        if (__DEV__) {
+          console.log('[Subscriptions] Overriding with active yearly subscription');
+        }
+      }
+    }
+    
+    if (__DEV__) {
+      console.log('[Subscriptions] Final entitlement:', {
+        isPro,
+        productIdentifier: entitlement?.productIdentifier,
+        willRenew: entitlement?.willRenew,
+        expirationDate: entitlement?.expirationDate,
+        hasActiveMonthly,
+        hasActiveYearly,
+        hasLifetime,
+      });
+    }
     
     // Check if it's a lifetime purchase
     const isLifetime = entitlement?.willRenew === false && 
@@ -484,11 +607,23 @@ const syncSubscriptionToSupabase = async (customerInfo) => {
  */
 export const syncSubscription = async () => {
   try {
+    // Check if RevenueCat is configured before trying to use it
+    try {
+      await Purchases.getCustomerInfo();
+    } catch (notConfiguredError) {
+      if (__DEV__) {
+        console.warn('[Subscriptions] RevenueCat not configured yet, skipping sync');
+      }
+      return { success: false, error: 'RevenueCat not configured' };
+    }
+    
     const customerInfo = await Purchases.getCustomerInfo();
     await syncSubscriptionToSupabase(customerInfo);
     return { success: true };
   } catch (error) {
-    console.error('[Subscriptions] Manual sync error:', error);
+    if (__DEV__) {
+      console.error('[Subscriptions] Manual sync error:', error);
+    }
     return { success: false, error: error.message };
   }
 };
@@ -500,8 +635,8 @@ export const syncSubscription = async () => {
 /**
  * Get subscription info for display
  */
-export const getSubscriptionInfo = async () => {
-  const status = await getSubscriptionStatus();
+export const getSubscriptionInfo = async (forceRefresh = false) => {
+  const status = await getSubscriptionStatus(forceRefresh);
   
   if (!status.isPro) {
     return {
@@ -518,7 +653,7 @@ export const getSubscriptionInfo = async () => {
       isPro: true,
       title: 'Lifetime PRO',
       description: 'Unlimited access forever',
-      badge: '⭐ Lifetime',
+      badge: 'Lifetime',
     };
   }
   
@@ -529,7 +664,7 @@ export const getSubscriptionInfo = async () => {
       description: 'Billed annually',
       expiresAt: status.expirationDate,
       willRenew: status.willRenew,
-      badge: '💎 PRO',
+      badge: 'PRO',
     };
   }
   
@@ -540,7 +675,7 @@ export const getSubscriptionInfo = async () => {
       description: 'Billed monthly',
       expiresAt: status.expirationDate,
       willRenew: status.willRenew,
-      badge: '💎 PRO',
+      badge: 'PRO',
     };
   }
   
@@ -548,8 +683,49 @@ export const getSubscriptionInfo = async () => {
     isPro: true,
     title: 'PRO',
     description: 'Active subscription',
-    badge: '💎 PRO',
+    badge: 'PRO',
   };
+};
+
+/**
+ * Open subscription management in App Store/Play Store
+ * This allows users to cancel or manage their subscriptions
+ */
+export const openSubscriptionManagement = async () => {
+  try {
+    if (Platform.OS === 'ios') {
+      // iOS: Open App Store subscription management
+      const url = 'https://apps.apple.com/account/subscriptions';
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+        return { success: true };
+      } else {
+        return { success: false, error: 'Cannot open App Store' };
+      }
+    } else if (Platform.OS === 'android') {
+      // Android: Open Play Store subscription management
+      const url = 'https://play.google.com/store/account/subscriptions';
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+        return { success: true };
+      } else {
+        // Try opening Play Store app directly
+        const playStoreUrl = 'market://details?id=com.google.android.gms';
+        try {
+          await Linking.openURL(playStoreUrl);
+          return { success: true };
+        } catch {
+          return { success: false, error: 'Cannot open Play Store' };
+        }
+      }
+    }
+    return { success: false, error: 'Platform not supported' };
+  } catch (error) {
+    console.error('[Subscriptions] Error opening subscription management:', error);
+    return { success: false, error: error.message };
+  }
 };
 
 /**

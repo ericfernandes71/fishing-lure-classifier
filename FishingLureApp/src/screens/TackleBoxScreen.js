@@ -32,6 +32,7 @@ export default function TackleBoxScreen({ navigation }) {
     showFavoritesOnly: false,
   });
   const [useSupabase, setUseSupabase] = useState(true); // Use Supabase by default
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
   const { user } = useAuth();
 
   const loadTackleBox = async () => {
@@ -46,16 +47,22 @@ export default function TackleBoxScreen({ navigation }) {
       if (user && useSupabase) {
         try {
           tackleBoxData = await getUserLureAnalyses();
-          console.log('[TackleBox] Loaded from Supabase:', tackleBoxData.length, 'lures');
+          if (__DEV__) {
+            console.log('[TackleBox] Loaded from Supabase:', tackleBoxData.length, 'lures');
+          }
         } catch (supabaseError) {
-          console.log('[TackleBox] Supabase failed, falling back to local:', supabaseError.message);
+          if (__DEV__) {
+            console.log('[TackleBox] Supabase failed, falling back to local:', supabaseError.message);
+          }
           // Fallback to local storage
           tackleBoxData = await getTackleBox();
         }
       } else {
         // Use local storage
         tackleBoxData = await getTackleBox();
-        console.log('[TackleBox] Loaded from local storage:', tackleBoxData.length, 'lures');
+        if (__DEV__) {
+          console.log('[TackleBox] Loaded from local storage:', tackleBoxData.length, 'lures');
+        }
       }
       
       setLures(tackleBoxData);
@@ -199,9 +206,13 @@ export default function TackleBoxScreen({ navigation }) {
         value = lure[key];
       }
       if (Array.isArray(value)) {
-        value.forEach(v => values.add(v));
-      } else if (value) {
-        values.add(value);
+        value.forEach(v => {
+          if (v != null) {
+            values.add(String(v));
+          }
+        });
+      } else if (value != null) {
+        values.add(String(value));
       }
     });
     return Array.from(values).sort();
@@ -280,17 +291,64 @@ export default function TackleBoxScreen({ navigation }) {
     // Get lure image URL (supports both local and Supabase formats)
     const imageUri = item.image_url || item.imageUri || item.image_path;
     
+    if (viewMode === 'grid') {
+      return (
+        <TouchableOpacity 
+          style={styles.gridCard}
+          onPress={() => navigation.navigate('LureDetail', { lure: item })}
+        >
+          {imageUri ? (
+            <Image source={{ uri: String(imageUri) }} style={styles.gridImage} />
+          ) : (
+            <View style={styles.gridImagePlaceholder}>
+              <Ionicons name="image-outline" size={40} color="#95a5a6" />
+            </View>
+          )}
+          <View style={styles.gridInfo}>
+            <Text style={styles.gridLureType} numberOfLines={1}>
+              {String(item.lure_type || 'Unknown Lure')}
+            </Text>
+            <View style={styles.gridFooter}>
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleToggleFavorite(item.id);
+                }}
+                style={styles.gridFavoriteButton}
+              >
+                <Ionicons 
+                  name={(item.is_favorite || item.isFavorite) ? "heart" : "heart-outline"} 
+                  size={18} 
+                  color={(item.is_favorite || item.isFavorite) ? "#e74c3c" : "#95a5a6"} 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  deleteLure(item.id);
+                }}
+                style={styles.gridDeleteButton}
+              >
+                <Ionicons name="trash" size={16} color="#e74c3c" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+    
+    // List view (default)
     return (
       <TouchableOpacity 
         style={styles.lureCard}
         onPress={() => navigation.navigate('LureDetail', { lure: item })}
       >
-        {imageUri && (
-          <Image source={{ uri: imageUri }} style={styles.lureImage} />
-        )}
+        {imageUri ? (
+          <Image source={{ uri: String(imageUri) }} style={styles.lureImage} />
+        ) : null}
       <View style={styles.lureInfo}>
         <View style={styles.lureHeader}>
-          <Text style={styles.lureType}>{item.lure_type || 'Unknown Lure'}</Text>
+          <Text style={styles.lureType}>{String(item.lure_type || 'Unknown Lure')}</Text>
           <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
@@ -306,20 +364,30 @@ export default function TackleBoxScreen({ navigation }) {
           </TouchableOpacity>
         </View>
         <Text style={styles.confidence}>
-          AI Scan Confidence: {item.confidence || item.chatgpt_analysis?.confidence || 'N/A'}%
+          AI Scan Confidence: {String(item.confidence || item.chatgpt_analysis?.confidence || 'N/A')}%
         </Text>
         <Text style={styles.targetSpecies}>
-          Target: {item.lure_details?.target_species?.join(', ') || 
-                   item.chatgpt_analysis?.target_species?.join(', ') || 'Various'}
+          Target: {(() => {
+            const species1 = Array.isArray(item.lure_details?.target_species) 
+              ? item.lure_details.target_species.filter(Boolean).map(s => String(s)).join(', ')
+              : null;
+            const species2 = Array.isArray(item.chatgpt_analysis?.target_species)
+              ? item.chatgpt_analysis.target_species.filter(Boolean).map(s => String(s)).join(', ')
+              : null;
+            return species1 || species2 || 'Various';
+          })()}
         </Text>
-        {item.catchCount && item.catchCount > 0 && (
-          <View style={styles.catchBadge}>
-            <Ionicons name="fish" size={16} color="#27ae60" />
-            <Text style={styles.catchCount}>{item.catchCount} catch{item.catchCount !== 1 ? 'es' : ''}</Text>
-          </View>
-        )}
+        {(() => {
+          const catchCount = Number(item.catchCount) || 0;
+          return catchCount > 0 ? (
+            <View style={styles.catchBadge}>
+              <Ionicons name="fish" size={16} color="#27ae60" />
+              <Text style={styles.catchCount}>{catchCount} catch{catchCount !== 1 ? 'es' : ''}</Text>
+            </View>
+          ) : null;
+        })()}
         <Text style={styles.timestamp}>
-          {new Date(item.analysis_date || Date.now()).toLocaleDateString()}
+          {String(new Date(item.analysis_date || Date.now()).toLocaleDateString())}
         </Text>
       </View>
       <TouchableOpacity
@@ -413,7 +481,7 @@ export default function TackleBoxScreen({ navigation }) {
                   ]}
                   onPress={() => setSelectedFilters({...selectedFilters, lureType: type})}
                 >
-                  <Text style={styles.filterChipText}>{type}</Text>
+                  <Text style={styles.filterChipText}>{String(type)}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -443,7 +511,7 @@ export default function TackleBoxScreen({ navigation }) {
                   ]}
                   onPress={() => setSelectedFilters({...selectedFilters, targetSpecies: species})}
                 >
-                  <Text style={styles.filterChipText}>{species}</Text>
+                  <Text style={styles.filterChipText}>{String(species)}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -491,20 +559,39 @@ export default function TackleBoxScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>🎒 My Tackle Box</Text>
-          <Text style={styles.subtitle}>
-            {filteredLures.length} of {lures.length} lure{lures.length !== 1 ? 's' : ''}
-          </Text>
+      {/* Count and Filter Bar */}
+      <View style={styles.countBar}>
+        <Text style={styles.countText}>
+          {filteredLures.length} of {lures.length} lure{lures.length !== 1 ? 's' : ''}
+        </Text>
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.viewToggleButton, viewMode === 'grid' && styles.viewToggleButtonActive]}
+            onPress={() => setViewMode('grid')}
+          >
+            <Ionicons 
+              name="grid" 
+              size={20} 
+              color={viewMode === 'grid' ? '#4A90E2' : '#95A5A6'} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewToggleButton, viewMode === 'list' && styles.viewToggleButtonActive]}
+            onPress={() => setViewMode('list')}
+          >
+            <Ionicons 
+              name="list" 
+              size={20} 
+              color={viewMode === 'list' ? '#4A90E2' : '#95A5A6'} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => setFilterModalVisible(true)}
+          >
+            <Ionicons name="filter" size={24} color="#2c3e50" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => setFilterModalVisible(true)}
-        >
-          <Ionicons name="filter" size={24} color="#2c3e50" />
-        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -545,7 +632,9 @@ export default function TackleBoxScreen({ navigation }) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={viewMode === 'grid' ? styles.gridContainer : styles.listContainer}
+          numColumns={viewMode === 'grid' ? 2 : 1}
+          key={viewMode} // Force re-render when view mode changes
         />
       )}
 
@@ -559,24 +648,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  header: {
+  countBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-  },
-  subtitle: {
+  countText: {
     fontSize: 14,
     color: '#7f8c8d',
-    marginTop: 2,
+    fontWeight: '500',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewToggleButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
+  },
+  viewToggleButtonActive: {
+    backgroundColor: '#E3F2FD',
   },
   filterButton: {
     padding: 10,
@@ -607,6 +705,53 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     padding: 15,
+  },
+  gridContainer: {
+    padding: 15,
+  },
+  gridCard: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    margin: 7.5,
+    width: '47%',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  gridImage: {
+    width: '100%',
+    height: 150,
+    backgroundColor: '#f0f0f0',
+  },
+  gridImagePlaceholder: {
+    width: '100%',
+    height: 150,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gridInfo: {
+    padding: 12,
+  },
+  gridLureType: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 8,
+  },
+  gridFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  gridFavoriteButton: {
+    padding: 4,
+  },
+  gridDeleteButton: {
+    padding: 4,
   },
   lureCard: {
     backgroundColor: 'white',
