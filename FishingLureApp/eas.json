@@ -5,13 +5,15 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "workingDirectory": "FishingLureApp"
     },
     "preview": {
       "distribution": "internal",
       "ios": {
         "simulator": true
-      }
+      },
+      "workingDirectory": "FishingLureApp"
     },
     "production": {
       "ios": {
@@ -19,13 +21,15 @@
       },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "workingDirectory": "FishingLureApp"
     },
     "production-ios": {
       "ios": {
         "buildConfiguration": "Release"
       },
-      "distribution": "store"
+      "distribution": "store",
+      "workingDirectory": "FishingLureApp"
     }
   },
   "submit": {
