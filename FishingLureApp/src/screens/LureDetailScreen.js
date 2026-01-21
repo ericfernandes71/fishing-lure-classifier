@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,50 @@ import {
   Modal,
   TextInput,
   FlatList,
+  ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import ViewShot from 'react-native-view-shot';
 import { addCatchToLure as addCatchLocal, deleteCatchFromLure } from '../services/storageService';
 import { addCatchToLure as addCatchSupabase, getCatchesForLure, deleteCatch } from '../services/supabaseService';
 import { useAuth } from '../contexts/AuthContext';
+import { shareCatchCard } from '../services/shareService';
+import { CatchShareCard } from '../components/CatchShareCard';
+
+// Predetermined options for catch data
+const FISH_SPECIES = [
+  'Select Species...',
+  'Largemouth Bass',
+  'Smallmouth Bass',
+  'Spotted Bass',
+  'Striped Bass',
+  'White Bass',
+  'Northern Pike',
+  'Musky',
+  'Walleye',
+  'Trout',
+  'Rainbow Trout',
+  'Brown Trout',
+  'Brook Trout',
+  'Crappie',
+  'Bluegill',
+  'Sunfish',
+  'Catfish',
+  'Channel Catfish',
+  'Blue Catfish',
+  'Flathead Catfish',
+  'Perch',
+  'Yellow Perch',
+  'White Perch',
+  'Other',
+];
+
+const WEIGHT_UNITS = ['lbs', 'kg', 'oz'];
+const LENGTH_UNITS = ['in', 'cm', 'ft'];
 
 export default function LureDetailScreen({ route, navigation }) {
   const { lure } = route.params;
@@ -26,12 +64,17 @@ export default function LureDetailScreen({ route, navigation }) {
   const [selectedCatch, setSelectedCatch] = useState(null);
   const [catchPhoto, setCatchPhoto] = useState(null);
   const [catchDetails, setCatchDetails] = useState({
-    fishSpecies: '',
-    weight: '',
-    length: '',
+    fishSpecies: 'Select Species...',
+    weightValue: '',
+    weightUnit: 'lbs',
+    lengthValue: '',
+    lengthUnit: 'in',
     location: '',
     notes: '',
   });
+  const [shareCardVisible, setShareCardVisible] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const shareCardRef = useRef(null);
 
   // Helper to check if lure is from Supabase (has UUID format)
   const isSupabaseLure = () => {
@@ -78,16 +121,14 @@ export default function LureDetailScreen({ route, navigation }) {
         }
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
+          allowsEditing: false, // Don't force crop - let user use full photo
+          quality: 0.9,
         });
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
+          allowsEditing: false, // Don't force crop - let user use full photo
+          quality: 0.9,
         });
       }
 
@@ -105,11 +146,24 @@ export default function LureDetailScreen({ route, navigation }) {
       return;
     }
 
+    if (!catchDetails.fishSpecies || catchDetails.fishSpecies === 'Select Species...') {
+      Alert.alert('Missing Information', 'Please select a fish species');
+      return;
+    }
+
     try {
+      // Format weight and length with units
+      const weight = catchDetails.weightValue ? `${catchDetails.weightValue} ${catchDetails.weightUnit}` : '';
+      const length = catchDetails.lengthValue ? `${catchDetails.lengthValue} ${catchDetails.lengthUnit}` : '';
+      
       const catchData = {
         imageUri: catchPhoto.uri,
         timestamp: new Date().toISOString(),
-        ...catchDetails,
+        fishSpecies: catchDetails.fishSpecies !== 'Select Species...' ? catchDetails.fishSpecies : '',
+        weight: weight,
+        length: length,
+        location: catchDetails.location,
+        notes: catchDetails.notes,
       };
 
       let newCatch;
@@ -147,15 +201,44 @@ export default function LureDetailScreen({ route, navigation }) {
       setAddCatchModalVisible(false);
       setCatchPhoto(null);
       setCatchDetails({
-        fishSpecies: '',
-        weight: '',
-        length: '',
+        fishSpecies: 'Select Species...',
+        weightValue: '',
+        weightUnit: 'lbs',
+        lengthValue: '',
+        lengthUnit: 'in',
         location: '',
         notes: '',
       });
     } catch (error) {
       console.error('[LureDetail] Save catch error:', error);
       Alert.alert('Error', `Failed to save catch: ${error.message}`);
+    }
+  };
+
+  const handleShareCatch = async () => {
+    if (!selectedCatch) return;
+    
+    try {
+      setIsSharing(true);
+      setShareCardVisible(true);
+      
+      // Wait a bit for the card to render
+      setTimeout(async () => {
+        try {
+          await shareCatchCard(shareCardRef);
+          setShareCardVisible(false);
+        } catch (error) {
+          console.error('[LureDetail] Share error:', error);
+          Alert.alert('Error', `Failed to share catch: ${error.message}`);
+        } finally {
+          setIsSharing(false);
+        }
+      }, 500);
+    } catch (error) {
+      console.error('[LureDetail] Share error:', error);
+      Alert.alert('Error', `Failed to share catch: ${error.message}`);
+      setIsSharing(false);
+      setShareCardVisible(false);
     }
   };
 
@@ -436,7 +519,18 @@ export default function LureDetailScreen({ route, navigation }) {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalContentWrapper}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          >
+            <ScrollView 
+              style={styles.modalContent}
+              contentContainerStyle={styles.modalContentContainer}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
             {/* Photo Picker */}
             <View style={styles.photoSection}>
               {catchPhoto ? (
@@ -469,29 +563,85 @@ export default function LureDetailScreen({ route, navigation }) {
 
             {/* Catch Details Form */}
             <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Fish Species</Text>
-              <TextInput
-                style={styles.formInput}
-                placeholder="e.g., Largemouth Bass"
-                value={catchDetails.fishSpecies}
-                onChangeText={(text) => setCatchDetails({...catchDetails, fishSpecies: text})}
-              />
+              <Text style={styles.formLabel}>Fish Species *</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={catchDetails.fishSpecies}
+                  onValueChange={(itemValue) => setCatchDetails({...catchDetails, fishSpecies: itemValue})}
+                  style={styles.picker}
+                  itemStyle={styles.pickerItem}
+                  dropdownIconColor="#2c3e50"
+                >
+                  {FISH_SPECIES.map((species, index) => (
+                    <Picker.Item 
+                      key={index} 
+                      label={species} 
+                      value={species}
+                      color={catchDetails.fishSpecies === species ? '#2e7d32' : '#2c3e50'}
+                    />
+                  ))}
+                </Picker>
+              </View>
 
               <Text style={styles.formLabel}>Weight</Text>
               <TextInput
                 style={styles.formInput}
-                placeholder="e.g., 3.5 lbs"
-                value={catchDetails.weight}
-                onChangeText={(text) => setCatchDetails({...catchDetails, weight: text})}
+                placeholder="3.5"
+                keyboardType="decimal-pad"
+                value={catchDetails.weightValue}
+                onChangeText={(text) => setCatchDetails({...catchDetails, weightValue: text})}
               />
+              <View style={styles.unitButtonsContainer}>
+                {WEIGHT_UNITS.map((unit, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.unitButton,
+                      catchDetails.weightUnit === unit && styles.unitButtonSelected
+                    ]}
+                    onPress={() => setCatchDetails({...catchDetails, weightUnit: unit})}
+                  >
+                    <Text
+                      style={[
+                        styles.unitButtonText,
+                        catchDetails.weightUnit === unit && styles.unitButtonTextSelected
+                      ]}
+                    >
+                      {unit === 'lbs' ? 'lbs' : unit === 'kg' ? 'kg' : 'oz'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <Text style={styles.formLabel}>Length</Text>
               <TextInput
                 style={styles.formInput}
-                placeholder="e.g., 18 inches"
-                value={catchDetails.length}
-                onChangeText={(text) => setCatchDetails({...catchDetails, length: text})}
+                placeholder="18"
+                keyboardType="decimal-pad"
+                value={catchDetails.lengthValue}
+                onChangeText={(text) => setCatchDetails({...catchDetails, lengthValue: text})}
               />
+              <View style={styles.unitButtonsContainer}>
+                {LENGTH_UNITS.map((unit, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.unitButton,
+                      catchDetails.lengthUnit === unit && styles.unitButtonSelected
+                    ]}
+                    onPress={() => setCatchDetails({...catchDetails, lengthUnit: unit})}
+                  >
+                    <Text
+                      style={[
+                        styles.unitButtonText,
+                        catchDetails.lengthUnit === unit && styles.unitButtonTextSelected
+                      ]}
+                    >
+                      {unit === 'in' ? 'inches' : unit === 'cm' ? 'cm' : 'ft'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <Text style={styles.formLabel}>Location</Text>
               <TextInput
@@ -512,20 +662,23 @@ export default function LureDetailScreen({ route, navigation }) {
               />
             </View>
           </ScrollView>
+          </KeyboardAvoidingView>
 
-          <View style={styles.modalActions}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setAddCatchModalVisible(false)}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={saveCatch}
-            >
-              <Text style={styles.saveButtonText}>Save Catch</Text>
-            </TouchableOpacity>
+          <View style={styles.modalActionsWrapper}>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setAddCatchModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={saveCatch}
+              >
+                <Text style={styles.saveButtonText}>Save Catch</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -568,6 +721,20 @@ export default function LureDetailScreen({ route, navigation }) {
 
               <View style={styles.catchViewActions}>
                 <TouchableOpacity
+                  style={styles.catchShareButton}
+                  onPress={handleShareCatch}
+                  disabled={isSharing}
+                >
+                  {isSharing ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="share-social" size={20} color="white" />
+                      <Text style={styles.catchShareButtonText}>Share</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={styles.catchDeleteButton}
                   onPress={() => handleDeleteCatch(selectedCatch.id)}
                 >
@@ -585,6 +752,23 @@ export default function LureDetailScreen({ route, navigation }) {
           )}
         </View>
       </Modal>
+
+      {/* Hidden Share Card for Capture */}
+      {shareCardVisible && selectedCatch && (
+        <View style={styles.shareCardContainer} pointerEvents="none">
+          <ViewShot 
+            ref={shareCardRef} 
+              options={{ 
+              format: 'jpg', 
+              quality: 0.95,
+              width: 1080,
+              height: 1920,
+            }}
+          >
+            <CatchShareCard catchData={selectedCatch} lureData={lure} />
+          </ViewShot>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -765,9 +949,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2c3e50',
   },
+  modalContentWrapper: {
+    flex: 1,
+  },
   modalContent: {
     flex: 1,
+  },
+  modalContentContainer: {
     padding: 20,
+    paddingBottom: 100, // Extra padding to account for fixed action buttons at bottom
   },
   photoSection: {
     marginBottom: 20,
@@ -835,11 +1025,67 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
+  pickerContainer: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#2c3e50',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 0,
+    minHeight: 50,
+  },
+  picker: {
+    height: Platform.OS === 'ios' ? 200 : 50,
+    backgroundColor: 'transparent',
+    color: '#2c3e50',
+  },
+  pickerItem: {
+    color: '#2c3e50',
+    fontSize: 16,
+  },
+  unitButtonsContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  unitButton: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1.5,
+    borderColor: '#e9ecef',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unitButtonSelected: {
+    backgroundColor: '#2e7d32',
+    borderColor: '#2e7d32',
+  },
+  unitButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2c3e50',
+  },
+  unitButtonTextSelected: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  modalActionsWrapper: {
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
   modalActions: {
     flexDirection: 'row',
     padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20, // Account for safe area on iOS
   },
   cancelButton: {
     flex: 1,
@@ -908,6 +1154,22 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e9ecef',
   },
+  catchShareButton: {
+    flex: 1,
+    backgroundColor: '#2e7d32',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 10,
+    marginRight: 10,
+  },
+  catchShareButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 8,
+    fontSize: 16,
+  },
   catchDeleteButton: {
     flex: 1,
     backgroundColor: '#e74c3c',
@@ -936,5 +1198,13 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
+  },
+  shareCardContainer: {
+    position: 'absolute',
+    left: -9999,
+    top: -9999,
+    width: 1080,
+    height: 1350,
+    opacity: 0,
   },
 });

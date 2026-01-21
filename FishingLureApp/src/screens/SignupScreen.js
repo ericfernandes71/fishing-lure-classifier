@@ -12,6 +12,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function SignupScreen({ navigation }) {
@@ -20,22 +21,28 @@ export default function SignupScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { signUp } = useAuth();
 
+  const clearError = () => setErrorMessage('');
+
   const handleSignup = async () => {
+    // Clear previous error
+    setErrorMessage('');
+    
     // Validation
     if (!fullName || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      setErrorMessage('Please fill in all fields');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      setErrorMessage('Passwords do not match');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      setErrorMessage('Password must be at least 6 characters');
       return;
     }
 
@@ -47,110 +54,155 @@ export default function SignupScreen({ navigation }) {
         'Account created successfully! Please check your email to verify your account.',
         [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
       );
+      // Only clear fields on successful signup
+      setFullName('');
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
     } catch (error) {
-      Alert.alert('Signup Failed', error.message);
+      // Keep all fields, just show error
+      setErrorMessage(error.message || 'Signup failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <LinearGradient
+      colors={['#e8f5e9', '#c8e6c9', '#a5d6a7']}
+      style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.header}>
-          <Image 
-            source={require('../../assets/icon.png')} 
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.title}>My Tackle Box</Text>
-          <Text style={styles.subtitle}>Create your account to get started</Text>
-        </View>
-
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Full Name</Text>
-            <TextInput
-              style={styles.input}
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="John Doe"
-              autoCapitalize="words"
-              editable={!isLoading}
-            />
+      <KeyboardAvoidingView 
+        style={styles.keyboardView} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <Image 
+                source={require('../../assets/icon.png')} 
+                style={styles.logo}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.title}>My Tackle Box</Text>
+            <Text style={styles.subtitle}>Create your account to get started</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="your@email.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isLoading}
-            />
-          </View>
+          <View style={styles.form}>
+            {errorMessage ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            ) : null}
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Minimum 6 characters"
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!isLoading}
-            />
-          </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput
+                style={[styles.input, errorMessage && styles.inputError]}
+                value={fullName}
+                onChangeText={(text) => {
+                  setFullName(text);
+                  clearError();
+                }}
+                placeholder="John Doe"
+                placeholderTextColor="#9e9e9e"
+                autoCapitalize="words"
+                editable={!isLoading}
+              />
+            </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <TextInput
-              style={styles.input}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Re-enter password"
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!isLoading}
-            />
-          </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={[styles.input, errorMessage && styles.inputError]}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  clearError();
+                }}
+                placeholder="your@email.com"
+                placeholderTextColor="#9e9e9e"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isLoading}
+              />
+            </View>
 
-          <TouchableOpacity
-            style={[styles.button, isLoading && styles.buttonDisabled]}
-            onPress={handleSignup}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Create Account</Text>
-            )}
-          </TouchableOpacity>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                style={[styles.input, errorMessage && styles.inputError]}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  clearError();
+                }}
+                placeholder="Minimum 6 characters"
+                placeholderTextColor="#9e9e9e"
+                secureTextEntry
+                autoCapitalize="none"
+                editable={!isLoading}
+              />
+            </View>
 
-          <View style={styles.linkContainer}>
-            <Text style={styles.linkText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.link}>Sign In</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Confirm Password</Text>
+              <TextInput
+                style={[styles.input, errorMessage && styles.inputError]}
+                value={confirmPassword}
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  clearError();
+                }}
+                placeholder="Re-enter password"
+                placeholderTextColor="#9e9e9e"
+                secureTextEntry
+                autoCapitalize="none"
+                editable={!isLoading}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, isLoading && styles.buttonDisabled]}
+              onPress={handleSignup}
+              disabled={isLoading}
+            >
+              <LinearGradient
+                colors={isLoading ? ['#bdc3c7', '#95a5a6'] : ['#2e7d32', '#388e3c']}
+                style={styles.buttonGradient}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>Create Account</Text>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
+
+            <View style={styles.linkContainer}>
+              <Text style={styles.linkText}>Already have an account? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={styles.link}>Sign In</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+  },
+  keyboardView: {
+    flex: 1,
   },
   scrollContainer: {
     flexGrow: 1,
@@ -159,33 +211,61 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 30,
+  },
+  logoContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
   logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 20,
+    width: 90,
+    height: 90,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#2c3e50',
-    marginBottom: 10,
+    color: '#1b5e20',
+    marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#7f8c8d',
+    color: '#4caf50',
     textAlign: 'center',
+    fontWeight: '500',
   },
   form: {
     backgroundColor: '#fff',
     padding: 30,
-    borderRadius: 15,
+    borderRadius: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  errorContainer: {
+    backgroundColor: '#ffebee',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f44336',
+  },
+  errorText: {
+    color: '#c62828',
+    fontSize: 14,
+    fontWeight: '500',
   },
   inputContainer: {
     marginBottom: 20,
@@ -193,26 +273,34 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2c3e50',
+    color: '#2e7d32',
     marginBottom: 8,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
     padding: 15,
     fontSize: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#fafafa',
+    color: '#212121',
+  },
+  inputError: {
+    borderColor: '#f44336',
+    backgroundColor: '#ffebee',
   },
   button: {
-    backgroundColor: '#27ae60',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
+    borderRadius: 10,
     marginTop: 10,
+    overflow: 'hidden',
+  },
+  buttonGradient: {
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonDisabled: {
-    backgroundColor: '#bdc3c7',
+    opacity: 0.6,
   },
   buttonText: {
     color: '#fff',
@@ -227,11 +315,11 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: 14,
-    color: '#7f8c8d',
+    color: '#616161',
   },
   link: {
     fontSize: 14,
-    color: '#3498db',
+    color: '#2e7d32',
     fontWeight: 'bold',
   },
 });

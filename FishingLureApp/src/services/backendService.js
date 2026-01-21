@@ -3,8 +3,13 @@ import { supabase } from '../config/supabase';
 import { Platform } from 'react-native';
 
 // Configuration - Use environment variables for security
-// Using production backend (Render) - always available
-export const BACKEND_URL = 'https://fishing-lure-backend.onrender.com';
+// For development: use local Flask server
+// For production: use Render backend
+// NOTE: For phone testing, ensure your computer's firewall allows port 5000
+// and that phone and computer are on the same Wi-Fi network
+export const BACKEND_URL = __DEV__ 
+  ? 'https://fishing-lure-backend.onrender.com'  // Use production for phone testing, or configure your local IP
+  : 'https://fishing-lure-backend.onrender.com';
 
 if (__DEV__) {
 console.log('[BackendService] Using backend URL:', BACKEND_URL);
