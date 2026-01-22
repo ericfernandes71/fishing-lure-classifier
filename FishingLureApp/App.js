@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 // Import screens
 import HomeScreen from './src/screens/HomeScreen';
 import TackleBoxScreen from './src/screens/TackleBoxScreen';
+import MapScreen from './src/screens/MapScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LureDetailScreen from './src/screens/LureDetailScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -110,6 +111,8 @@ function MainTabNavigator() {
             iconName = focused ? 'camera' : 'camera-outline';
           } else if (route.name === 'TackleBox') {
             iconName = focused ? 'fish' : 'fish-outline';
+          } else if (route.name === 'Map') {
+            iconName = focused ? 'map' : 'map-outline';
           } else if (route.name === 'Settings') {
             iconName = focused ? 'settings' : 'settings-outline';
           }
@@ -167,6 +170,15 @@ function MainTabNavigator() {
         options={{ 
           title: 'My Tackle Box',
           tabBarLabel: 'Tackle Box',
+        }}
+      />
+      <Tab.Screen 
+        name="Map" 
+        component={MapScreen} 
+        options={{ 
+          title: 'Fishing Map',
+          tabBarLabel: 'Map',
+          headerShown: false,
         }}
       />
       <Tab.Screen 

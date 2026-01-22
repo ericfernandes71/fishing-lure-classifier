@@ -208,6 +208,43 @@ export const addCatchToLure = async (lureId, catchData) => {
   }
 };
 
+// Update catch in a lure
+export const updateCatchFromLure = async (lureId, catchId, catchData) => {
+  try {
+    const existingLures = await getTackleBox();
+    const lureIndex = existingLures.findIndex(lure => lure.id === lureId);
+    
+    if (lureIndex === -1) {
+      throw new Error('Lure not found');
+    }
+    
+    // Find and update the catch
+    const catchIndex = existingLures[lureIndex].catches.findIndex(
+      catch_ => catch_.id === catchId
+    );
+    
+    if (catchIndex === -1) {
+      throw new Error('Catch not found');
+    }
+    
+    // Update catch data
+    existingLures[lureIndex].catches[catchIndex] = {
+      ...existingLures[lureIndex].catches[catchIndex],
+      ...catchData,
+      id: catchId, // Preserve the original ID
+    };
+    
+    await AsyncStorage.setItem(TACKLE_BOX_KEY, JSON.stringify(existingLures));
+    
+    return existingLures[lureIndex].catches[catchIndex];
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error updating catch:', error);
+    }
+    throw new Error('Failed to update catch');
+  }
+};
+
 // Delete catch from a lure
 export const deleteCatchFromLure = async (lureId, catchId) => {
   try {
@@ -234,6 +271,37 @@ export const deleteCatchFromLure = async (lureId, catchId) => {
       console.error('Error deleting catch:', error);
     }
     throw new Error('Failed to delete catch');
+  }
+};
+
+// Get all catches with location data from all lures (for map view)
+export const getAllCatchesWithLocations = async () => {
+  try {
+    const tackleBox = await getTackleBox();
+    const allCatches = [];
+    
+    tackleBox.forEach(lure => {
+      if (lure.catches && Array.isArray(lure.catches)) {
+        lure.catches.forEach(catch_ => {
+          // Only include catches with location data
+          if (catch_.latitude && catch_.longitude) {
+            allCatches.push({
+              ...catch_,
+              lureId: lure.id,
+              lureType: lure.lure_type,
+              lureImageUri: lure.imageUri || lure.image_url,
+            });
+          }
+        });
+      }
+    });
+    
+    return allCatches;
+  } catch (error) {
+    if (__DEV__) {
+      console.error('Error getting all catches with locations:', error);
+    }
+    return [];
   }
 };
 

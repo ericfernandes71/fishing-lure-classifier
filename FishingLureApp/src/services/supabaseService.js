@@ -421,22 +421,46 @@ export const addCatchToLure = async (lureAnalysisId, catchData) => {
       imageUrl = uploadResult.url;
     }
 
+    const insertData = {
+      lure_analysis_id: lureAnalysisId,
+      user_id: user.id,
+      fish_species: catchData.fishSpecies,
+      weight: catchData.weight,
+      length: catchData.length,
+      location: catchData.location,
+      notes: catchData.notes,
+      image_url: imageUrl,
+      latitude: catchData.latitude || null,
+      longitude: catchData.longitude || null,
+    };
+
+    if (__DEV__) {
+      console.log('[Supabase] Adding catch with location:', {
+        hasLocation: !!(catchData.latitude && catchData.longitude),
+        latitude: catchData.latitude,
+        longitude: catchData.longitude,
+      });
+    }
+
     const { data, error } = await supabase
       .from('catches')
-      .insert([{
-        lure_analysis_id: lureAnalysisId,
-        user_id: user.id,
-        fish_species: catchData.fishSpecies,
-        weight: catchData.weight,
-        length: catchData.length,
-        location: catchData.location,
-        notes: catchData.notes,
-        image_url: imageUrl,
-      }])
+      .insert([insertData])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Supabase] Add catch error:', error);
+      throw error;
+    }
+    
+    if (__DEV__) {
+      console.log('[Supabase] Catch added successfully:', {
+        id: data.id,
+        latitude: data.latitude,
+        longitude: data.longitude,
+      });
+    }
+    
     return { success: true, catch: data };
   } catch (error) {
     console.error('[Supabase] Add catch error:', error);
@@ -464,6 +488,113 @@ export const getCatchesForLure = async (lureAnalysisId) => {
   } catch (error) {
     console.error('[Supabase] Get catches error:', error);
     return [];
+  }
+};
+
+/**
+ * Get all catches with location data for map view
+ */
+export const getAllCatchesWithLocations = async () => {
+  try {
+    const user = await getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+      .from('catches')
+      .select(`
+        *,
+        lure_analyses!catches_lure_analysis_id_fkey (
+          id,
+          lure_type,
+          image_url
+        )
+      `)
+      .eq('user_id', user.id)
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null)
+      .order('catch_date', { ascending: false });
+
+    if (error) {
+      console.error('[Supabase] getAllCatchesWithLocations error:', error);
+      throw error;
+    }
+    
+    if (__DEV__) {
+      console.log('[Supabase] getAllCatchesWithLocations returned:', data?.length || 0, 'catches');
+      if (data && data.length > 0) {
+        console.log('[Supabase] Sample catch:', {
+          id: data[0].id,
+          latitude: data[0].latitude,
+          longitude: data[0].longitude,
+          hasLureData: !!data[0].lure_analyses,
+        });
+      }
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('[Supabase] Get all catches with locations error:', error);
+    return [];
+  }
+};
+
+/**
+ * Update a catch
+ */
+export const updateCatch = async (catchId, catchData) => {
+  try {
+    const user = await getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Upload new catch image to storage if provided and it's a local file
+    // (not already a URL from Supabase storage)
+    let imageUrl = null;
+    if (catchData.imageUri) {
+      // Check if it's a local file (needs upload) or already a URL (keep as-is)
+      const isLocalFile = catchData.imageUri.startsWith('file://') || 
+                          catchData.imageUri.startsWith('content://') ||
+                          catchData.imageUri.startsWith('data:');
+      
+      if (isLocalFile) {
+        // New photo - upload it
+        const catchFileName = `catch_${Date.now()}.jpg`;
+        const uploadResult = await uploadLureImage(catchData.imageUri, catchFileName);
+        imageUrl = uploadResult.url;
+      } else {
+        // Already a URL - use it directly (user didn't change the photo)
+        imageUrl = catchData.imageUri;
+      }
+    }
+
+    const updateData = {
+      fish_species: catchData.fishSpecies,
+      weight: catchData.weight,
+      length: catchData.length,
+      location: catchData.location,
+      notes: catchData.notes,
+      updated_at: new Date().toISOString(),
+      latitude: catchData.latitude || null,
+      longitude: catchData.longitude || null,
+    };
+
+    // Update image_url if we have one (either new upload or existing)
+    if (imageUrl) {
+      updateData.image_url = imageUrl;
+    }
+
+    const { data, error } = await supabase
+      .from('catches')
+      .update(updateData)
+      .eq('id', catchId)
+      .eq('user_id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, catch: data };
+  } catch (error) {
+    console.error('[Supabase] Update catch error:', error);
+    throw new Error(error.message || 'Failed to update catch');
   }
 };
 

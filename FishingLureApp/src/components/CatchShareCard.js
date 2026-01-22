@@ -164,8 +164,8 @@ const styles = StyleSheet.create({
     borderRadius: 35,
   },
   logo: {
-    width: 72,
-    height: 72,
+    width: 120,
+    height: 120,
     marginRight: 20,
   },
   brandText: {
@@ -214,12 +214,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(46, 125, 50, 0.9)', // Green with transparency
-    paddingVertical: 18,
-    paddingHorizontal: 12,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
-    minHeight: 100, // Ensure consistent height
+    minHeight: 140, // Ensure consistent height
   },
   statContent: {
     alignItems: 'center',
@@ -227,14 +227,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 42,
     fontWeight: 'bold',
     color: '#FFFFFF',
     marginBottom: 6,
     textAlign: 'center',
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 18,
     color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 0.5,

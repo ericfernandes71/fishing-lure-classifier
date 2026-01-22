@@ -230,6 +230,7 @@ const styles = StyleSheet.create({
   logo: {
     width: 90,
     height: 90,
+    borderRadius: 20, // Round the corners for a modern look
   },
   title: {
     fontSize: 32,

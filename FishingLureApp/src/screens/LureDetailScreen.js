@@ -17,9 +17,10 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import ViewShot from 'react-native-view-shot';
-import { addCatchToLure as addCatchLocal, deleteCatchFromLure } from '../services/storageService';
-import { addCatchToLure as addCatchSupabase, getCatchesForLure, deleteCatch } from '../services/supabaseService';
+import { addCatchToLure as addCatchLocal, updateCatchFromLure, deleteCatchFromLure } from '../services/storageService';
+import { addCatchToLure as addCatchSupabase, updateCatch, getCatchesForLure, deleteCatch } from '../services/supabaseService';
 import { useAuth } from '../contexts/AuthContext';
 import { shareCatchCard } from '../services/shareService';
 import { CatchShareCard } from '../components/CatchShareCard';
@@ -62,6 +63,7 @@ export default function LureDetailScreen({ route, navigation }) {
   const [addCatchModalVisible, setAddCatchModalVisible] = useState(false);
   const [viewCatchModalVisible, setViewCatchModalVisible] = useState(false);
   const [selectedCatch, setSelectedCatch] = useState(null);
+  const [editingCatchId, setEditingCatchId] = useState(null); // Track which catch we're editing
   const [catchPhoto, setCatchPhoto] = useState(null);
   const [catchDetails, setCatchDetails] = useState({
     fishSpecies: 'Select Species...',
@@ -72,6 +74,7 @@ export default function LureDetailScreen({ route, navigation }) {
     location: '',
     notes: '',
   });
+  const [catchLocation, setCatchLocation] = useState(null); // { latitude, longitude }
   const [shareCardVisible, setShareCardVisible] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const shareCardRef = useRef(null);
@@ -98,6 +101,8 @@ export default function LureDetailScreen({ route, navigation }) {
             length: c.length,
             location: c.location,
             notes: c.notes,
+            latitude: c.latitude,
+            longitude: c.longitude,
           }));
           setCatches(formattedCatches);
           console.log('[LureDetail] Loaded catches from Supabase:', formattedCatches.length);
@@ -108,6 +113,31 @@ export default function LureDetailScreen({ route, navigation }) {
     };
     loadCatches();
   }, [lure.id, user]);
+
+  // Capture current location
+  const captureLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        if (__DEV__) {
+          console.log('[LureDetail] Location permission denied');
+        }
+        return null;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+    } catch (error) {
+      console.error('[LureDetail] Error capturing location:', error);
+      return null;
+    }
+  };
 
   const pickCatchPhoto = async (useCamera = false) => {
     try {
@@ -134,14 +164,82 @@ export default function LureDetailScreen({ route, navigation }) {
 
       if (!result.canceled) {
         setCatchPhoto(result.assets[0]);
+        // Auto-capture location when photo is selected
+        if (!editingCatchId) {
+          if (__DEV__) {
+            console.log('[LureDetail] Photo selected, capturing location...');
+          }
+          const location = await captureLocation();
+          if (location) {
+            setCatchLocation(location);
+            if (__DEV__) {
+              console.log('[LureDetail] ✓ Location captured:', location);
+            }
+          } else {
+            if (__DEV__) {
+              console.log('[LureDetail] ⚠ Location capture failed or denied');
+            }
+          }
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick photo');
     }
   };
 
+  // Helper to parse weight/length strings (e.g., "3.5 lbs" -> { value: "3.5", unit: "lbs" })
+  const parseWeightOrLength = (str) => {
+    if (!str) return { value: '', unit: '' };
+    const parts = str.trim().split(' ');
+    if (parts.length >= 2) {
+      return { value: parts[0], unit: parts[1] };
+    }
+    return { value: str, unit: '' };
+  };
+
+  // Populate form with existing catch data for editing
+  const populateCatchForm = (catchToEdit) => {
+    const weightParsed = parseWeightOrLength(catchToEdit.weight);
+    const lengthParsed = parseWeightOrLength(catchToEdit.length);
+    
+    setCatchDetails({
+      fishSpecies: catchToEdit.fishSpecies || 'Select Species...',
+      weightValue: weightParsed.value,
+      weightUnit: weightParsed.unit || 'lbs',
+      lengthValue: lengthParsed.value,
+      lengthUnit: lengthParsed.unit || 'in',
+      location: catchToEdit.location || '',
+      notes: catchToEdit.notes || '',
+    });
+    
+    // Set photo if it exists
+    if (catchToEdit.imageUri) {
+      setCatchPhoto({ uri: catchToEdit.imageUri });
+    }
+    
+    // Set location if it exists
+    if (catchToEdit.latitude && catchToEdit.longitude) {
+      setCatchLocation({
+        latitude: catchToEdit.latitude,
+        longitude: catchToEdit.longitude,
+      });
+    } else {
+      setCatchLocation(null);
+    }
+  };
+
+  const handleEditCatch = () => {
+    if (!selectedCatch) return;
+    
+    setEditingCatchId(selectedCatch.id);
+    populateCatchForm(selectedCatch);
+    setViewCatchModalVisible(false);
+    setAddCatchModalVisible(true);
+  };
+
   const saveCatch = async () => {
-    if (!catchPhoto) {
+    // Photo is required for new catches, but optional for edits (can keep existing)
+    if (!editingCatchId && !catchPhoto) {
       Alert.alert('No Photo', 'Please add a photo of your catch');
       return;
     }
@@ -157,49 +255,93 @@ export default function LureDetailScreen({ route, navigation }) {
       const length = catchDetails.lengthValue ? `${catchDetails.lengthValue} ${catchDetails.lengthUnit}` : '';
       
       const catchData = {
-        imageUri: catchPhoto.uri,
-        timestamp: new Date().toISOString(),
+        imageUri: catchPhoto?.uri || null, // Can be null if editing and not changing photo
+        timestamp: editingCatchId ? selectedCatch?.timestamp : new Date().toISOString(),
         fishSpecies: catchDetails.fishSpecies !== 'Select Species...' ? catchDetails.fishSpecies : '',
         weight: weight,
         length: length,
         location: catchDetails.location,
         notes: catchDetails.notes,
+        latitude: catchLocation?.latitude || null,
+        longitude: catchLocation?.longitude || null,
       };
 
-      let newCatch;
+      if (__DEV__) {
+        console.log('[LureDetail] Saving catch with location:', {
+          hasLocation: !!(catchLocation?.latitude && catchLocation?.longitude),
+          latitude: catchLocation?.latitude,
+          longitude: catchLocation?.longitude,
+        });
+      }
 
-      // Use Supabase for Supabase lures, local storage for local lures
-      if (user && isSupabaseLure()) {
-        console.log('[LureDetail] Saving catch to Supabase for lure:', lure.id);
-        const result = await addCatchSupabase(lure.id, catchData);
-        // Convert to display format
-        newCatch = {
-          id: result.catch.id,
-          imageUri: result.catch.image_url,
-          timestamp: result.catch.catch_date || result.catch.created_at,
-          fishSpecies: result.catch.fish_species,
-          weight: result.catch.weight,
-          length: result.catch.length,
-          location: result.catch.location,
-          notes: result.catch.notes,
-        };
+      let updatedCatch;
+
+      if (editingCatchId) {
+        // Update existing catch
+        if (user && isSupabaseLure()) {
+          console.log('[LureDetail] Updating catch in Supabase:', editingCatchId);
+          const result = await updateCatch(editingCatchId, catchData);
+          updatedCatch = {
+            id: result.catch.id,
+            imageUri: result.catch.image_url,
+            timestamp: result.catch.catch_date || result.catch.created_at,
+            fishSpecies: result.catch.fish_species,
+            weight: result.catch.weight,
+            length: result.catch.length,
+            location: result.catch.location,
+            notes: result.catch.notes,
+            latitude: result.catch.latitude,
+            longitude: result.catch.longitude,
+          };
+        } else {
+          // Local storage
+          const lureIdentifier = lure.id || lure.timestamp || Date.now().toString();
+          console.log('[LureDetail] Updating catch locally:', editingCatchId);
+          const updated = await updateCatchFromLure(lureIdentifier, editingCatchId, catchData);
+          updatedCatch = updated;
+        }
+        
+        // Update local state - replace the catch
+        setCatches(catches.map(c => c.id === editingCatchId ? updatedCatch : c));
+        Alert.alert('Success', 'Catch updated successfully!');
       } else {
-        // Local storage
-        const lureIdentifier = lure.id || lure.timestamp || Date.now().toString();
-        console.log('[LureDetail] Saving catch locally for lure:', lureIdentifier);
-        await addCatchLocal(lureIdentifier, catchData);
-        newCatch = {
-          id: Date.now().toString(),
-          ...catchData,
-        };
+        // Create new catch
+        if (user && isSupabaseLure()) {
+          console.log('[LureDetail] Saving catch to Supabase for lure:', lure.id);
+          const result = await addCatchSupabase(lure.id, catchData);
+          updatedCatch = {
+            id: result.catch.id,
+            imageUri: result.catch.image_url,
+            timestamp: result.catch.catch_date || result.catch.created_at,
+            fishSpecies: result.catch.fish_species,
+            weight: result.catch.weight,
+            length: result.catch.length,
+            location: result.catch.location,
+            notes: result.catch.notes,
+            latitude: result.catch.latitude,
+            longitude: result.catch.longitude,
+          };
+        } else {
+          // Local storage
+          const lureIdentifier = lure.id || lure.timestamp || Date.now().toString();
+          console.log('[LureDetail] Saving catch locally for lure:', lureIdentifier);
+          await addCatchLocal(lureIdentifier, catchData);
+          updatedCatch = {
+            id: Date.now().toString(),
+            ...catchData,
+          };
+        }
+        
+        // Update local state - add new catch
+        setCatches([...catches, updatedCatch]);
+        Alert.alert('Success', 'Catch added successfully!');
       }
       
-      // Update local state
-      setCatches([...catches, newCatch]);
-      
-      Alert.alert('Success', 'Catch added successfully!');
+      // Reset form and close modal
       setAddCatchModalVisible(false);
+      setEditingCatchId(null);
       setCatchPhoto(null);
+      setCatchLocation(null);
       setCatchDetails({
         fishSpecies: 'Select Species...',
         weightValue: '',
@@ -211,7 +353,7 @@ export default function LureDetailScreen({ route, navigation }) {
       });
     } catch (error) {
       console.error('[LureDetail] Save catch error:', error);
-      Alert.alert('Error', `Failed to save catch: ${error.message}`);
+      Alert.alert('Error', `Failed to ${editingCatchId ? 'update' : 'save'} catch: ${error.message}`);
     }
   };
 
@@ -513,8 +655,22 @@ export default function LureDetailScreen({ route, navigation }) {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>📸 Add Catch</Text>
-            <TouchableOpacity onPress={() => setAddCatchModalVisible(false)}>
+            <Text style={styles.modalTitle}>{editingCatchId ? '✏️ Edit Catch' : '📸 Add Catch'}</Text>
+            <TouchableOpacity onPress={() => {
+              setAddCatchModalVisible(false);
+              setEditingCatchId(null);
+              setCatchPhoto(null);
+              setCatchLocation(null);
+              setCatchDetails({
+                fishSpecies: 'Select Species...',
+                weightValue: '',
+                weightUnit: 'lbs',
+                lengthValue: '',
+                lengthUnit: 'in',
+                location: '',
+                notes: '',
+              });
+            }}>
               <Ionicons name="close" size={24} color="#2c3e50" />
             </TouchableOpacity>
           </View>
@@ -534,11 +690,21 @@ export default function LureDetailScreen({ route, navigation }) {
             {/* Photo Picker */}
             <View style={styles.photoSection}>
               {catchPhoto ? (
-                <Image source={{ uri: catchPhoto.uri }} style={styles.catchPhotoPreview} />
+                <View>
+                  <Image source={{ uri: catchPhoto.uri }} style={styles.catchPhotoPreview} />
+                  {catchLocation && (
+                    <View style={styles.locationIndicator}>
+                      <Ionicons name="location" size={16} color="#4A90E2" />
+                      <Text style={styles.locationIndicatorText}>Location captured</Text>
+                    </View>
+                  )}
+                </View>
               ) : (
                 <View style={styles.photoPlaceholder}>
                   <Ionicons name="camera" size={48} color="#95a5a6" />
-                  <Text style={styles.photoPlaceholderText}>Add a photo of your catch</Text>
+                  <Text style={styles.photoPlaceholderText}>
+                    {editingCatchId ? 'Change catch photo (optional)' : 'Add a photo of your catch'}
+                  </Text>
                 </View>
               )}
               
@@ -676,7 +842,7 @@ export default function LureDetailScreen({ route, navigation }) {
                 style={styles.saveButton}
                 onPress={saveCatch}
               >
-                <Text style={styles.saveButtonText}>Save Catch</Text>
+                <Text style={styles.saveButtonText}>{editingCatchId ? 'Update Catch' : 'Save Catch'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -695,60 +861,78 @@ export default function LureDetailScreen({ route, navigation }) {
             onPress={() => setViewCatchModalVisible(false)}
           />
           {selectedCatch && (
-            <View style={styles.catchViewContainer}>
-              <Image source={{ uri: selectedCatch.imageUri }} style={styles.catchViewImage} />
-              
-              <View style={styles.catchViewDetails}>
-                {selectedCatch.fishSpecies && (
-                  <Text style={styles.catchViewText}>🐟 {selectedCatch.fishSpecies}</Text>
-                )}
-                {selectedCatch.weight && (
-                  <Text style={styles.catchViewText}>⚖️ {selectedCatch.weight}</Text>
-                )}
-                {selectedCatch.length && (
-                  <Text style={styles.catchViewText}>📏 {selectedCatch.length}</Text>
-                )}
-                {selectedCatch.location && (
-                  <Text style={styles.catchViewText}>📍 {selectedCatch.location}</Text>
-                )}
-                {selectedCatch.notes && (
-                  <Text style={styles.catchViewText}>📝 {selectedCatch.notes}</Text>
-                )}
-                <Text style={styles.catchViewDate}>
-                  {new Date(selectedCatch.timestamp).toLocaleDateString()}
-                </Text>
-              </View>
-
-              <View style={styles.catchViewActions}>
-                <TouchableOpacity
-                  style={styles.catchShareButton}
-                  onPress={handleShareCatch}
-                  disabled={isSharing}
-                >
-                  {isSharing ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Ionicons name="share-social" size={20} color="white" />
-                      <Text style={styles.catchShareButtonText}>Share</Text>
-                    </>
+            <ScrollView 
+              style={styles.catchViewScrollContainer}
+              contentContainerStyle={styles.catchViewScrollContent}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+              alwaysBounceVertical={false}
+            >
+              <View style={styles.catchViewContainer}>
+                <Image source={{ uri: selectedCatch.imageUri }} style={styles.catchViewImage} />
+                
+                <View style={styles.catchViewDetails}>
+                  {selectedCatch.fishSpecies && (
+                    <Text style={styles.catchViewText}>🐟 {selectedCatch.fishSpecies}</Text>
                   )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.catchDeleteButton}
-                  onPress={() => handleDeleteCatch(selectedCatch.id)}
-                >
-                  <Ionicons name="trash" size={20} color="white" />
-                  <Text style={styles.catchDeleteButtonText}>Delete</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.catchCloseButton}
-                  onPress={() => setViewCatchModalVisible(false)}
-                >
-                  <Text style={styles.catchCloseButtonText}>Close</Text>
-                </TouchableOpacity>
+                  {selectedCatch.weight && (
+                    <Text style={styles.catchViewText}>⚖️ {selectedCatch.weight}</Text>
+                  )}
+                  {selectedCatch.length && (
+                    <Text style={styles.catchViewText}>📏 {selectedCatch.length}</Text>
+                  )}
+                  {selectedCatch.location && (
+                    <Text style={styles.catchViewText}>📍 {selectedCatch.location}</Text>
+                  )}
+                  {selectedCatch.notes && (
+                    <Text style={styles.catchViewText}>📝 {selectedCatch.notes}</Text>
+                  )}
+                  <Text style={styles.catchViewDate}>
+                    {new Date(selectedCatch.timestamp).toLocaleDateString()}
+                  </Text>
+                </View>
+
+                <View style={styles.catchViewActions}>
+                  <TouchableOpacity
+                    style={styles.catchEditButton}
+                    onPress={handleEditCatch}
+                  >
+                    <Ionicons name="create" size={20} color="white" />
+                    <Text style={styles.catchEditButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.catchShareButton}
+                    onPress={handleShareCatch}
+                    disabled={isSharing}
+                  >
+                    {isSharing ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="share-social" size={20} color="white" />
+                        <Text style={styles.catchShareButtonText}>Share</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.catchDeleteButton}
+                    onPress={() => handleDeleteCatch(selectedCatch.id)}
+                  >
+                    <Ionicons name="trash" size={20} color="white" />
+                    <Text style={styles.catchDeleteButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.catchCloseButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.catchCloseButton}
+                    onPress={() => setViewCatchModalVisible(false)}
+                  >
+                    <Text style={styles.catchCloseButtonText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
+            </ScrollView>
           )}
         </View>
       </Modal>
@@ -968,6 +1152,28 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 15,
   },
+  locationIndicator: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  locationIndicatorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4A90E2',
+  },
   photoPlaceholder: {
     width: '100%',
     height: 250,
@@ -1125,8 +1331,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  catchViewContainer: {
+  catchViewScrollContainer: {
     width: '90%',
+    maxHeight: '90%',
+  },
+  catchViewScrollContent: {
+    paddingTop: 20,
+    paddingBottom: 15, // Match the paddingBottom of Close button container
+  },
+  catchViewContainer: {
+    width: '100%',
     backgroundColor: 'white',
     borderRadius: 15,
     overflow: 'hidden',
@@ -1151,8 +1365,33 @@ const styles = StyleSheet.create({
   catchViewActions: {
     flexDirection: 'row',
     padding: 15,
+    paddingTop: 25,
+    paddingBottom: 15,
     borderTopWidth: 1,
     borderTopColor: '#e9ecef',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  catchCloseButtonContainer: {
+    paddingHorizontal: 15,
+    paddingTop: 15,
+    paddingBottom: 15, // Equal spacing above and below
+  },
+  catchEditButton: {
+    flex: 1,
+    backgroundColor: '#3498db',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 10,
+    minWidth: 80,
+  },
+  catchEditButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 8,
+    fontSize: 16,
   },
   catchShareButton: {
     flex: 1,
@@ -1162,7 +1401,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 12,
     borderRadius: 10,
-    marginRight: 10,
+    minWidth: 80,
   },
   catchShareButtonText: {
     color: 'white',
@@ -1178,7 +1417,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 12,
     borderRadius: 10,
-    marginRight: 10,
+    minWidth: 80,
   },
   catchDeleteButtonText: {
     color: 'white',
@@ -1187,16 +1426,17 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   catchCloseButton: {
-    flex: 1,
+    width: '100%',
     backgroundColor: '#95a5a6',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
+    padding: 16,
     borderRadius: 10,
   },
   catchCloseButtonText: {
     color: 'white',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
   shareCardContainer: {

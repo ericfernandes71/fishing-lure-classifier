@@ -76,9 +76,21 @@ export default function HomeScreen() {
         const status = await getQuotaStatus();
         setQuotaStatus(status);
       } catch (error) {
+        // Silently fail - don't show errors to user
+        // Quota status will just show default values
         if (__DEV__) {
-        console.error('Failed to load quota:', error);
+          console.warn('[HomeScreen] Failed to load quota (silent):', error.message);
         }
+        // Set a safe default quota status
+        setQuotaStatus({
+          isPro: false,
+          unlimited: false,
+          used: 0,
+          remaining: 10,
+          limit: 10,
+          message: '10 scans remaining',
+          emoji: '✅'
+        });
       }
     }
   };
@@ -161,6 +173,22 @@ export default function HomeScreen() {
   const analyzeImage = async () => {
     if (!selectedImage) {
       Alert.alert('No Image', 'Please select an image first');
+      return;
+    }
+
+    // Check if user is signed in (required for scanning)
+    if (!user) {
+      Alert.alert(
+        'Sign In Required',
+        'Please sign in to use the lure analyzer. This helps us manage costs and provide better service.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Sign In', 
+            onPress: () => navigation.navigate('Settings')
+          }
+        ]
+      );
       return;
     }
 

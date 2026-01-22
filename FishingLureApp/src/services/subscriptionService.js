@@ -20,8 +20,9 @@ import { BACKEND_URL } from './backendService'; // Use same backend URL
 const REVENUECAT_API_KEY_TEST = 'test_dUUNiOeOwXcEMWFAsvnVGrKkMvp';
 // Production iOS key - Connected to App Store Connect (for production builds only)
 const REVENUECAT_API_KEY_IOS_PRODUCTION = 'appl_pgNgDazBFRrUubpNYcmYQqCNvPh';
-// Production Android key - Update when Google Play is set up
-const REVENUECAT_API_KEY_ANDROID_PRODUCTION = 'test_dUUNiOeOwXcEMWFAsvnVGrKkMvp'; // Still using test key
+// Production Android key - Get from RevenueCat when Google Play is set up
+// TODO: Replace with your actual Android production API key from RevenueCat dashboard
+const REVENUECAT_API_KEY_ANDROID_PRODUCTION = 'REPLACE_WITH_ANDROID_PRODUCTION_KEY';
 
 // Determine which key to use based on environment
 // In Expo Go, we must use test key. In production builds, use production keys.
@@ -42,16 +43,17 @@ const getApiKey = () => {
   };
 };
 
-// Product IDs (must match App Store Connect product identifiers exactly)
-// Updated to match App Store Connect Product IDs
+// Product IDs (must match App Store Connect / Google Play / RevenueCat exactly)
+// See SUBSCRIPTION_SETUP_FOR_APP_STORES.md
 export const PRODUCT_IDS = {
-  MONTHLY: 'monthly_pro',
-  YEARLY: 'yearly_pro',
-  LIFETIME: 'lifetime_pro',
+  MONTHLY: 'fishing_lure_pro_monthly',
+  YEARLY: 'fishing_lure_pro_yearly',
+  LIFETIME: 'fishing_lure_pro_lifetime',
 };
 
 // Entitlement ID (set in RevenueCat dashboard) - Must match RevenueCat identifier exactly!
-const ENTITLEMENT_ID = 'MyTackleBox Pro'; // Updated to match RevenueCat dashboard
+// See REVENUECAT_REACT_NATIVE_SETUP_COMPLETE.md - use 'pro' as created in dashboard
+const ENTITLEMENT_ID = 'pro';
 
 // Free tier limits
 const FREE_TIER_LIMIT = 10; // scans per month
@@ -78,7 +80,13 @@ export const initializeSubscriptions = async (userId) => {
         console.log('[Subscriptions] Already configured, skipping initialization');
       }
       return { success: true };
-    } catch (notConfiguredError) {
+    } catch (e) {
+      // Only treat "not configured" as non-fatal; rethrow real errors (network, etc.)
+      const msg = (e?.message || '').toLowerCase();
+      const isNotConfigured = msg.includes('configure') || msg.includes('singleton') || msg.includes('instance');
+      if (!isNotConfigured) {
+        throw e;
+      }
       // Not configured yet, proceed with configuration
     }
     
@@ -144,17 +152,22 @@ export const getSubscriptionStatus = async (forceRefresh = false) => {
     const allPurchasedProducts = customerInfo.allPurchasedProductIdentifiers || [];
     
     // Check active subscriptions (recurring subscriptions that are currently active)
-    const activeSubscriptions = customerInfo.activeSubscriptions || {};
+    // RevenueCat returns array of product ids or object; support both
+    const activeSubscriptions = customerInfo.activeSubscriptions || [];
+    const hasProduct = (subs, id) => {
+      if (!subs) return false;
+      return Array.isArray(subs) ? subs.includes(id) : (subs[id] !== undefined);
+    };
     
     if (__DEV__) {
       console.log('[Subscriptions] All purchased products:', allPurchasedProducts);
-      console.log('[Subscriptions] Active subscriptions:', Object.keys(activeSubscriptions));
+      console.log('[Subscriptions] Active subscriptions:', activeSubscriptions);
       console.log('[Subscriptions] Active entitlements:', Object.keys(customerInfo.entitlements.active));
     }
     
     // Check if user has an active recurring subscription (monthly or yearly)
-    const hasActiveMonthly = activeSubscriptions[PRODUCT_IDS.MONTHLY] !== undefined;
-    const hasActiveYearly = activeSubscriptions[PRODUCT_IDS.YEARLY] !== undefined;
+    const hasActiveMonthly = hasProduct(activeSubscriptions, PRODUCT_IDS.MONTHLY);
+    const hasActiveYearly = hasProduct(activeSubscriptions, PRODUCT_IDS.YEARLY);
     const hasLifetime = allPurchasedProducts.includes(PRODUCT_IDS.LIFETIME);
     
     // Get the entitlement object (RevenueCat returns one entitlement, might be lifetime)
@@ -165,25 +178,26 @@ export const getSubscriptionStatus = async (forceRefresh = false) => {
     if (entitlement && (hasActiveMonthly || hasActiveYearly)) {
       // Check if the active subscription is actually granting the entitlement
       // If monthly/yearly is active, use that product identifier even if entitlement shows lifetime
+      // Note: activeSubscriptions may be array (product ids) or object; use entitlement expiration when available
       if (hasActiveMonthly) {
-        // Create a synthetic entitlement object for monthly
-        const monthlySubscription = activeSubscriptions[PRODUCT_IDS.MONTHLY];
+        const sub = Array.isArray(activeSubscriptions) ? null : activeSubscriptions[PRODUCT_IDS.MONTHLY];
+        const exp = (sub && typeof sub === 'object' && sub.expirationDate) ? sub.expirationDate : (entitlement?.expirationDate || null);
         entitlement = {
           productIdentifier: PRODUCT_IDS.MONTHLY,
           willRenew: true,
-          expirationDate: monthlySubscription.expirationDate || null,
+          expirationDate: exp,
           periodType: 'MONTH',
         };
         if (__DEV__) {
           console.log('[Subscriptions] Overriding with active monthly subscription');
         }
       } else if (hasActiveYearly) {
-        // Create a synthetic entitlement object for yearly
-        const yearlySubscription = activeSubscriptions[PRODUCT_IDS.YEARLY];
+        const sub = Array.isArray(activeSubscriptions) ? null : activeSubscriptions[PRODUCT_IDS.YEARLY];
+        const exp = (sub && typeof sub === 'object' && sub.expirationDate) ? sub.expirationDate : (entitlement?.expirationDate || null);
         entitlement = {
           productIdentifier: PRODUCT_IDS.YEARLY,
           willRenew: true,
-          expirationDate: yearlySubscription.expirationDate || null,
+          expirationDate: exp,
           periodType: 'YEAR',
         };
         if (__DEV__) {
@@ -472,7 +486,11 @@ export const getMonthlyQuota = async () => {
         resetDate: quota.reset_date || resetDate.toISOString(),
       };
     } catch (backendError) {
-      console.warn('[Subscriptions] Backend quota check failed, returning defaults:', backendError.message);
+      // Silently fail - don't show errors to user during sign-in
+      // Just return safe defaults if backend is unreachable
+      if (__DEV__) {
+        console.warn('[Subscriptions] Backend quota check failed (silent fallback):', backendError.message);
+      }
       // Return safe defaults if backend is unreachable
       return {
         used: 0,
@@ -610,7 +628,10 @@ export const syncSubscription = async () => {
     // Check if RevenueCat is configured before trying to use it
     try {
       await Purchases.getCustomerInfo();
-    } catch (notConfiguredError) {
+    } catch (e) {
+      const msg = (e?.message || '').toLowerCase();
+      const isNotConfigured = msg.includes('configure') || msg.includes('singleton') || msg.includes('instance');
+      if (!isNotConfigured) throw e;
       if (__DEV__) {
         console.warn('[Subscriptions] RevenueCat not configured yet, skipping sync');
       }

@@ -7,9 +7,12 @@ import { Platform } from 'react-native';
 // For production: use Render backend
 // NOTE: For phone testing, ensure your computer's firewall allows port 5000
 // and that phone and computer are on the same Wi-Fi network
+// Update the local IP address below to match your computer's IP on your local network
+// For remote testing with friends, temporarily switch to production backend
+// NOTE: Using production backend for now since local server may have network/firewall issues
 export const BACKEND_URL = __DEV__ 
-  ? 'https://fishing-lure-backend.onrender.com'  // Use production for phone testing, or configure your local IP
-  : 'https://fishing-lure-backend.onrender.com';
+  ? 'https://fishing-lure-backend.onrender.com'  // Production backend (use for testing when local server unreachable)
+  : 'https://fishing-lure-backend.onrender.com';  // Production Render backend
 
 if (__DEV__) {
 console.log('[BackendService] Using backend URL:', BACKEND_URL);
@@ -47,6 +50,10 @@ export const analyzeLureWithBackend = async (imageUri) => {
     // Get current user ID
     const userId = await getCurrentUserId();
     
+    if (__DEV__) {
+      console.log('[BackendService] Starting analysis, userId:', userId ? 'present' : 'missing');
+    }
+    
     // Create FormData for file upload
     const formData = new FormData();
     
@@ -81,34 +88,63 @@ export const analyzeLureWithBackend = async (imageUri) => {
     return apiResponse.data;
 
   } catch (error) {
-    // Only log errors in development mode
+    // Enhanced error logging in development mode
     if (__DEV__) {
-      console.error('Backend analysis error:', error);
+      console.error('[BackendService] Analysis error:', error);
+      if (error.response) {
+        console.error('[BackendService] Response status:', error.response.status);
+        console.error('[BackendService] Response data:', error.response.data);
+      }
+      if (error.request) {
+        console.error('[BackendService] Request made but no response:', error.request);
+      }
     }
     
-    if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
-      throw new Error('Cannot connect to server. Please make sure your Flask server is running and accessible.');
-    } else if (error.response) {
+    // Network errors
+    if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error') || error.code === 'ECONNREFUSED') {
+      throw new Error('Cannot connect to server. Please make sure your Flask server is running at ' + BACKEND_URL);
+    }
+    
+    // Timeout errors
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      throw new Error('Request timed out. The server may be busy. Please try again.');
+    }
+    
+    // HTTP response errors
+    if (error.response) {
       const status = error.response.status;
       const data = error.response.data;
-      const message = data?.error || data?.message || 'Server error occurred';
+      const message = data?.message || data?.error || 'Server error occurred';
+      
+      // Handle authentication required (401)
+      if (status === 401) {
+        throw new Error('Please sign in to use the lure analyzer.');
+      }
       
       // Handle quota exceeded (403) - this should trigger paywall
-      if (status === 403 && data?.error === 'quota_exceeded') {
-        const quotaError = new Error(data.message);
+      if (status === 403 && (data?.error === 'quota_exceeded' || message.includes('quota'))) {
+        const quotaError = new Error(data.message || message);
         quotaError.code = 'QUOTA_EXCEEDED';
         quotaError.quota = data.quota;
         throw quotaError;
       }
       
-      if (status === 500) {
-        throw new Error('Server error. Please check your API configuration.');
-      } else {
-        throw new Error(`Server Error (${status}): ${message}`);
+      // Handle service unavailable (503) - quota check failed or Supabase down
+      if (status === 503) {
+        throw new Error(message || 'Service temporarily unavailable. Please try again later.');
       }
-    } else {
-      throw new Error('Failed to analyze lure. Please check your connection and try again.');
+      
+      // Handle server errors (500)
+      if (status === 500) {
+        throw new Error('Server error occurred. Please try again or contact support.');
+      }
+      
+      // Other HTTP errors
+      throw new Error(message || `Server Error (${status}). Please try again.`);
     }
+    
+    // Generic error fallback
+    throw new Error(error.message || 'Failed to analyze lure. Please check your connection and try again.');
   }
 };
 

@@ -96,17 +96,41 @@ def upload_file():
             print(f"[INFO] File uploaded: {filename}")
             
             # Check quota BEFORE analyzing (count all attempts, not just successful ones)
+            # CRITICAL: This prevents expensive API calls if quota is exceeded
             user_id = request.form.get('user_id') or request.headers.get('X-User-ID')
             
-            if user_id and supabase_service.is_enabled():
-                quota_check = supabase_service.can_user_scan(user_id)
-                if not quota_check.get('can_scan'):
-                    print(f"[WARNING] User {user_id} exceeded quota")
+            if user_id:
+                if supabase_service.is_enabled():
+                    try:
+                        quota_check = supabase_service.can_user_scan(user_id)
+                        if not quota_check.get('can_scan'):
+                            print(f"[WARNING] User {user_id} exceeded quota")
+                            return jsonify({
+                                'error': 'quota_exceeded',
+                                'message': 'You have used all your free scans this month. Upgrade to PRO for unlimited scans!',
+                                'quota': quota_check
+                            }), 403
+                    except Exception as e:
+                        # FAIL-SAFE: If quota check fails, DENY the request to prevent unexpected costs
+                        print(f"[ERROR] Quota check failed: {e}")
+                        return jsonify({
+                            'error': 'quota_check_failed',
+                            'message': 'Unable to verify quota. Please try again later or upgrade to PRO for guaranteed access.'
+                        }), 503
+                else:
+                    # Supabase disabled - require PRO status or deny
+                    # This prevents unlimited free scans if Supabase is down
+                    print(f"[WARNING] Supabase disabled - requiring authentication for scan")
                     return jsonify({
-                        'error': 'quota_exceeded',
-                        'message': 'You have used all your free scans this month. Upgrade to PRO for unlimited scans!',
-                        'quota': quota_check
-                    }), 403
+                        'error': 'service_unavailable',
+                        'message': 'Quota system temporarily unavailable. Please try again later or upgrade to PRO.'
+                    }), 503
+            else:
+                # No user ID - require authentication
+                return jsonify({
+                    'error': 'authentication_required',
+                    'message': 'Please sign in to use the lure analyzer.'
+                }), 401
             
             # Check if classifier is available
             if not mobile_classifier:
