@@ -556,10 +556,52 @@ def check_scan_quota():
         # Check if user can scan
         quota_status = supabase_service.can_user_scan(user_id)
         
+        # Add debug info in development
+        if __name__ == '__main__' or os.getenv('FLASK_ENV') == 'development':
+            print(f"[DEBUG] Quota check for user {user_id}: {quota_status}")
+        
         return jsonify(quota_status)
         
     except Exception as e:
         print(f"[ERROR] Quota check failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/debug/user-scans', methods=['GET'])
+def debug_user_scans():
+    """Debug endpoint to see all scans for a user (dev only)"""
+    try:
+        user_id = request.args.get('user_id') or request.headers.get('X-User-ID')
+        
+        if not user_id:
+            return jsonify({'error': 'User ID required'}), 401
+        
+        if not supabase_service.is_enabled():
+            return jsonify({'error': 'Supabase not enabled'}), 503
+        
+        # Get all scans for user
+        all_scans = supabase_service.get_user_lure_analyses(user_id)
+        
+        # Get monthly count
+        monthly_count = supabase_service.get_monthly_scan_count(user_id)
+        
+        # Get scans from this month
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+        
+        this_month_scans = [s for s in all_scans if s.get('created_at') and s['created_at'] >= start_of_month.isoformat()]
+        
+        return jsonify({
+            'user_id': user_id,
+            'total_scans': len(all_scans),
+            'monthly_count': monthly_count,
+            'this_month_scans': len(this_month_scans),
+            'start_of_month': start_of_month.isoformat(),
+            'sample_scans': all_scans[:5] if all_scans else []
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] Debug scan check failed: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/subscription-stats', methods=['GET'])

@@ -381,10 +381,10 @@ class SupabaseService:
             return 0
         
         try:
-            from datetime import datetime
-            # Get start of current month
-            now = datetime.now()
-            start_of_month = datetime(now.year, now.month, 1)
+            from datetime import datetime, timezone
+            # Get start of current month in UTC (Supabase stores timestamps in UTC)
+            now = datetime.now(timezone.utc)
+            start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
             
             response = self.client.table('lure_analyses')\
                 .select('id', count='exact')\
@@ -392,7 +392,9 @@ class SupabaseService:
                 .gte('created_at', start_of_month.isoformat())\
                 .execute()
             
-            return response.count if response.count else 0
+            count = response.count if response.count else 0
+            print(f"[DEBUG] Monthly scan count for user {user_id}: {count} (since {start_of_month.isoformat()})")
+            return count
             
         except Exception as e:
             print(f"[ERROR] Failed to get scan count: {str(e)}")
