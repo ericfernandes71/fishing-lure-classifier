@@ -44,11 +44,20 @@ export default function PaywallScreen({ navigation, route }) {
       setPackages(result.packages);
       // Auto-select the annual package (best value)
       const annualPkg = result.packages.find(pkg => 
-        pkg.packageType === 'ANNUAL' || pkg.identifier.includes('annual')
+        pkg.packageType === 'ANNUAL' || pkg.identifier.includes('annual') || pkg.identifier.includes('yearly')
       );
       setSelectedPackage(annualPkg || result.packages[0]);
+      
+      // Show warning if using fallback packages (RevenueCat not configured)
+      if (result.isFallback && __DEV__) {
+        console.warn('[Paywall] Using fallback packages - RevenueCat not configured or no offerings available');
+      }
     } else {
-      Alert.alert('Error', 'Could not load subscription packages. Please try again.');
+      Alert.alert(
+        'Subscription Packages Unavailable',
+        result.error || 'Could not load subscription packages. Please try again later or contact support.',
+        [{ text: 'OK' }]
+      );
     }
     
     setLoading(false);
@@ -67,8 +76,21 @@ export default function PaywallScreen({ navigation, route }) {
         'You now have unlimited lure scans and all PRO features!',
         [{ text: 'Start Scanning!', onPress: () => navigation.goBack() }]
       );
-    } else if (!result.cancelled) {
-      Alert.alert('Purchase Failed', result.error || 'Something went wrong. Please try again.');
+    } else if (result.cancelled) {
+      // User cancelled - don't show error
+      return;
+    } else if (result.needsConfiguration) {
+      Alert.alert(
+        'Configuration Required',
+        result.error || 'Subscription packages need to be configured. Please contact support or try again later.',
+        [{ text: 'OK' }]
+      );
+    } else {
+      Alert.alert(
+        'Purchase Failed',
+        result.error || 'Something went wrong. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
   

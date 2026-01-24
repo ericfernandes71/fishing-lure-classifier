@@ -48,8 +48,78 @@ class SupabaseService:
     # LURE ANALYSES
     # ========================================================================
     
+    def create_pending_scan(self, user_id: str, image_name: str = None) -> Optional[str]:
+        """Create a pending scan record immediately (counts toward quota even if analysis fails)"""
+        if not self.is_enabled():
+            print("[WARNING] Supabase not enabled, skipping pending scan creation")
+            return None
+        
+        try:
+            data_to_insert = {
+                'user_id': user_id,
+                'lure_type': 'Scanning...',  # Placeholder, will be updated
+                'confidence': 0,
+                'image_name': image_name or 'pending',
+                'analysis_method': 'Pending',
+            }
+            
+            response = self.client.table('lure_analyses').insert(data_to_insert).execute()
+            scan_id = response.data[0].get('id') if response.data else None
+            print(f"[OK] Created pending scan record for user {user_id} (ID: {scan_id})")
+            return scan_id
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"[ERROR] Failed to create pending scan: {error_msg}")
+            if "JWT" in error_msg or "authentication" in error_msg.lower():
+                print("[INFO] Authentication error - check your SUPABASE_SERVICE_ROLE_KEY")
+            elif "relation" in error_msg.lower() or "table" in error_msg.lower():
+                print("[INFO] Database schema error - run supabase_schema.sql in Supabase SQL Editor")
+            return None
+    
+    def update_scan_with_results(self, scan_id: str, analysis_data: Dict) -> Optional[Dict]:
+        """Update a pending scan record with analysis results"""
+        if not self.is_enabled():
+            return None
+        
+        try:
+            # Ensure required fields have values (can't be None)
+            lure_type = analysis_data.get('lure_type') or 'Unknown'
+            confidence = analysis_data.get('confidence')
+            if confidence is None:
+                confidence = 0
+            
+            data_to_update = {
+                'lure_type': lure_type,
+                'confidence': confidence,
+                'image_url': analysis_data.get('image_url'),
+                'image_name': analysis_data.get('image_name'),
+                'image_path': analysis_data.get('image_path'),
+                'analysis_method': analysis_data.get('analysis_method', 'ChatGPT Vision API'),
+                'chatgpt_analysis': analysis_data.get('chatgpt_analysis', {}),
+                'lure_details': analysis_data.get('lure_details', {}),
+                'api_cost_usd': analysis_data.get('api_cost_usd'),
+                'tokens_used': analysis_data.get('tokens_used'),
+            }
+            
+            # Remove None values to avoid overwriting with null
+            data_to_update = {k: v for k, v in data_to_update.items() if v is not None}
+            
+            response = self.client.table('lure_analyses')\
+                .update(data_to_update)\
+                .eq('id', scan_id)\
+                .execute()
+            
+            print(f"[OK] Updated scan record {scan_id} with analysis results")
+            return response.data[0] if response.data else None
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"[ERROR] Failed to update scan record: {error_msg}")
+            return None
+    
     def save_lure_analysis(self, user_id: str, analysis_data: Dict) -> Optional[Dict]:
-        """Save lure analysis to Supabase database"""
+        """Save lure analysis to Supabase database (legacy - use create_pending_scan + update_scan_with_results)"""
         if not self.is_enabled():
             print("[WARNING] Supabase not enabled, skipping save")
             return None

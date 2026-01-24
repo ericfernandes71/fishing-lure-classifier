@@ -53,10 +53,52 @@ export const PRODUCT_IDS = {
 
 // Entitlement ID (set in RevenueCat dashboard) - Must match RevenueCat identifier exactly!
 // See REVENUECAT_REACT_NATIVE_SETUP_COMPLETE.md - use 'pro' as created in dashboard
-const ENTITLEMENT_ID = 'pro';
+// NOTE: Updated to match actual RevenueCat entitlement: "MyTackleBox Pro"
+const ENTITLEMENT_ID = 'MyTackleBox Pro';
 
 // Free tier limits
 const FREE_TIER_LIMIT = 10; // scans per month
+
+// ============================================================================
+// TEST OVERRIDES (Dev only – use Subscription Test screen to set)
+// ============================================================================
+
+let __subscriptionTestOverrides = {};
+
+/**
+ * Set a test override to force a specific failure scenario.
+ * Only applies in __DEV__. Use clearSubscriptionTestOverrides() to reset.
+ * @param {string} key - One of: FORCE_FREE_TIER, NOT_CONFIGURED, NO_OFFERINGS, PACKAGES_ERROR, PURCHASE_CANCELLED,
+ *   PURCHASE_FAIL, RESTORE_NO_PURCHASES, RESTORE_FAIL, QUOTA_EXCEEDED, QUOTA_CHECK_FAIL,
+ *   STATUS_FAIL, GET_INFO_FAIL
+ * @param {boolean} [enabled=true]
+ */
+export const setSubscriptionTestOverride = (key, enabled = true) => {
+  if (!__DEV__) return;
+  __subscriptionTestOverrides[key] = !!enabled;
+  if (__DEV__) {
+    console.log('[Subscriptions] Test override set:', key, '=', !!enabled);
+  }
+};
+
+/**
+ * Clear all test overrides.
+ */
+export const clearSubscriptionTestOverrides = () => {
+  __subscriptionTestOverrides = {};
+  if (__DEV__) {
+    console.log('[Subscriptions] All test overrides cleared');
+  }
+};
+
+/**
+ * Get current test overrides (for UI).
+ */
+export const getSubscriptionTestOverrides = () => {
+  return __DEV__ ? { ...__subscriptionTestOverrides } : {};
+};
+
+const _hasOverride = (key) => __DEV__ && !!__subscriptionTestOverrides[key];
 
 // ============================================================================
 // INITIALIZATION
@@ -73,21 +115,33 @@ export const initializeSubscriptions = async (userId) => {
       ? keys.ios 
       : keys.android;
     
+    if (__DEV__) {
+      console.log('[Subscriptions] Initializing with API key:', apiKey.substring(0, 10) + '...');
+      console.log('[Subscriptions] Platform:', Platform.OS);
+      console.log('[Subscriptions] User ID:', userId);
+    }
+    
     // Check if already configured to avoid re-initialization errors
     try {
-      await Purchases.getCustomerInfo();
+      const customerInfo = await Purchases.getCustomerInfo();
       if (__DEV__) {
-        console.log('[Subscriptions] Already configured, skipping initialization');
+        console.log('[Subscriptions] Already configured, customer ID:', customerInfo.originalAppUserId);
       }
-      return { success: true };
+      return { success: true, alreadyConfigured: true };
     } catch (e) {
       // Only treat "not configured" as non-fatal; rethrow real errors (network, etc.)
       const msg = (e?.message || '').toLowerCase();
       const isNotConfigured = msg.includes('configure') || msg.includes('singleton') || msg.includes('instance');
       if (!isNotConfigured) {
+        if (__DEV__) {
+          console.warn('[Subscriptions] Error checking if configured:', e.message);
+        }
         throw e;
       }
       // Not configured yet, proceed with configuration
+      if (__DEV__) {
+        console.log('[Subscriptions] Not configured yet, proceeding with initialization...');
+      }
     }
     
     // Configure RevenueCat with user ID
@@ -99,12 +153,27 @@ export const initializeSubscriptions = async (userId) => {
     // Enable debug logs in development
     if (__DEV__) {
       Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+      console.log('[Subscriptions] Debug logging enabled');
     }
     
-    console.log('[Subscriptions] ✓ Initialized successfully');
+    // Verify configuration worked by getting customer info
+    try {
+      const customerInfo = await Purchases.getCustomerInfo();
+      if (__DEV__) {
+        console.log('[Subscriptions] ✓ Initialized successfully, customer ID:', customerInfo.originalAppUserId);
+      }
+    } catch (verifyError) {
+      console.warn('[Subscriptions] Configuration completed but verification failed:', verifyError.message);
+    }
+    
     return { success: true };
   } catch (error) {
     console.error('[Subscriptions] ✗ Init error:', error);
+    console.error('[Subscriptions] Error details:', {
+      message: error.message,
+      code: error.code,
+      userInfo: error.userInfo,
+    });
     // Don't fail completely - subscription features will just use fallback
     return { success: false, error: error.message };
   }
@@ -137,6 +206,24 @@ export const refreshCustomerInfo = async () => {
  */
 export const getSubscriptionStatus = async (forceRefresh = false) => {
   try {
+    // TEST OVERRIDE: Force "status fail"
+    if (_hasOverride('STATUS_FAIL')) {
+      throw new Error('[TEST] Simulated subscription status failure.');
+    }
+    // TEST OVERRIDE: Force free tier (treat as non-PRO even if subscription exists)
+    if (_hasOverride('FORCE_FREE_TIER')) {
+      // Return free tier status regardless of actual subscription
+      const now = new Date();
+      const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return {
+        isPro: false,
+        productIdentifier: null,
+        expirationDate: null,
+        willRenew: false,
+        periodType: null,
+      };
+    }
+
     // Check if RevenueCat is configured
     let customerInfo;
     if (forceRefresh) {
@@ -279,30 +366,124 @@ export const isUserPro = async () => {
  */
 export const getSubscriptionPackages = async () => {
   try {
+    // TEST OVERRIDE: Force "not configured" – return fallback packages
+    if (_hasOverride('NOT_CONFIGURED')) {
+      return { success: true, packages: getFallbackPackages(), isFallback: true };
+    }
+    // TEST OVERRIDE: Force "no offerings" – return fallback packages
+    if (_hasOverride('NO_OFFERINGS')) {
+      return { success: true, packages: getFallbackPackages(), isFallback: true };
+    }
+    // TEST OVERRIDE: Force "packages error" – return failure
+    if (_hasOverride('PACKAGES_ERROR')) {
+      return { success: false, packages: [], error: '[TEST] Simulated packages load error.' };
+    }
+
+    // Check if RevenueCat is configured first
+    try {
+      await Purchases.getCustomerInfo();
+    } catch (configError) {
+      const msg = (configError?.message || '').toLowerCase();
+      const isNotConfigured = msg.includes('configure') || msg.includes('singleton') || msg.includes('instance');
+      
+      if (isNotConfigured) {
+        if (__DEV__) {
+          console.warn('[Subscriptions] RevenueCat not configured yet, returning fallback packages');
+        }
+        // Return fallback packages for testing
+        return {
+          success: true,
+          packages: getFallbackPackages(),
+          isFallback: true,
+        };
+      }
+      throw configError;
+    }
+    
+    // Try to get offerings from RevenueCat
     const offerings = await Purchases.getOfferings();
     
     if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
+      if (__DEV__) {
+        console.log('[Subscriptions] Loaded', offerings.current.availablePackages.length, 'packages from RevenueCat');
+      }
       return {
         success: true,
         packages: offerings.current.availablePackages,
         current: offerings.current,
       };
     } else {
-      console.warn('[Subscriptions] No offerings found');
+      if (__DEV__) {
+        console.warn('[Subscriptions] No offerings found in RevenueCat, using fallback packages');
+      }
+      // Return fallback packages if RevenueCat has no offerings configured
       return {
-        success: false,
-        packages: [],
-        error: 'No subscription packages available'
+        success: true,
+        packages: getFallbackPackages(),
+        isFallback: true,
       };
     }
   } catch (error) {
     console.error('[Subscriptions] Get packages error:', error);
+    
+    // Return fallback packages on error so user can still see options
+    if (__DEV__) {
+      console.warn('[Subscriptions] Using fallback packages due to error');
+    }
     return {
-      success: false,
-      packages: [],
-      error: error.message
+      success: true,
+      packages: getFallbackPackages(),
+      isFallback: true,
+      error: error.message, // Include error for debugging
     };
   }
+};
+
+/**
+ * Create fallback packages when RevenueCat isn't configured or offerings aren't available
+ * These are mock packages for testing/development
+ */
+const getFallbackPackages = () => {
+  // Create mock package objects that match RevenueCat package structure
+  const createMockPackage = (identifier, title, description, priceString, packageType) => {
+    return {
+      identifier,
+      packageType,
+      isFallback: true, // Mark so purchase returns needsConfiguration
+      product: {
+        identifier: identifier,
+        description: description,
+        title: title,
+        price: 0, // Will be set by store
+        priceString: priceString,
+        currencyCode: 'USD',
+      },
+    };
+  };
+  
+  return [
+    createMockPackage(
+      PRODUCT_IDS.MONTHLY,
+      'Monthly PRO',
+      'Unlimited scans, billed monthly',
+      '$4.99/month',
+      'MONTHLY'
+    ),
+    createMockPackage(
+      PRODUCT_IDS.YEARLY,
+      'Annual PRO',
+      'Unlimited scans, billed annually',
+      '$39.99/year',
+      'ANNUAL'
+    ),
+    createMockPackage(
+      PRODUCT_IDS.LIFETIME,
+      'Lifetime PRO',
+      'One-time payment, lifetime access',
+      '$99.99',
+      'LIFETIME'
+    ),
+  ];
 };
 
 // ============================================================================
@@ -314,6 +495,42 @@ export const getSubscriptionPackages = async () => {
  */
 export const purchaseSubscription = async (packageToPurchase) => {
   try {
+    // TEST OVERRIDE: Force "purchase cancelled"
+    if (_hasOverride('PURCHASE_CANCELLED')) {
+      return { success: false, cancelled: true };
+    }
+    // TEST OVERRIDE: Force "purchase fail"
+    if (_hasOverride('PURCHASE_FAIL')) {
+      return { success: false, error: '[TEST] Simulated purchase failure.' };
+    }
+
+    // Check if this is a fallback package (can't actually purchase)
+    if (packageToPurchase.isFallback || !packageToPurchase.product?.identifier) {
+      return {
+        success: false,
+        error: 'Subscription packages are not configured yet. Please set up RevenueCat offerings in the dashboard.',
+        needsConfiguration: true,
+      };
+    }
+    
+    // Check if RevenueCat is configured
+    try {
+      await Purchases.getCustomerInfo();
+    } catch (configError) {
+      const msg = (configError?.message || '').toLowerCase();
+      const isNotConfigured = msg.includes('configure') || msg.includes('singleton') || msg.includes('instance');
+      
+      if (isNotConfigured) {
+        return {
+          success: false,
+          error: 'RevenueCat is not configured. Please ensure subscriptions are initialized.',
+          needsConfiguration: true,
+        };
+      }
+      throw configError;
+    }
+    
+    // Attempt purchase
     const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
     
     const isPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
@@ -331,7 +548,7 @@ export const purchaseSubscription = async (packageToPurchase) => {
     } else {
       return { 
         success: false, 
-        error: 'Purchase did not grant PRO access' 
+        error: 'Purchase did not grant PRO access. Please check your RevenueCat configuration.' 
       };
     }
   } catch (error) {
@@ -343,9 +560,18 @@ export const purchaseSubscription = async (packageToPurchase) => {
       };
     } else {
       console.error('[Subscriptions] Purchase error:', error);
+      
+      // Provide more helpful error messages
+      let errorMessage = error.message || 'Purchase failed';
+      if (error.message?.includes('not configured') || error.message?.includes('singleton')) {
+        errorMessage = 'RevenueCat is not configured. Please restart the app after signing in.';
+      } else if (error.message?.includes('offerings') || error.message?.includes('package')) {
+        errorMessage = 'Subscription packages are not available. Please check RevenueCat dashboard configuration.';
+      }
+      
       return { 
         success: false, 
-        error: error.message 
+        error: errorMessage 
       };
     }
   }
@@ -357,6 +583,15 @@ export const purchaseSubscription = async (packageToPurchase) => {
  */
 export const restorePurchases = async () => {
   try {
+    // TEST OVERRIDE: Force "restore – no purchases"
+    if (_hasOverride('RESTORE_NO_PURCHASES')) {
+      return { success: true, isPro: false, message: 'No purchases to restore' };
+    }
+    // TEST OVERRIDE: Force "restore fail"
+    if (_hasOverride('RESTORE_FAIL')) {
+      return { success: false, error: '[TEST] Simulated restore failure.' };
+    }
+
     const customerInfo = await Purchases.restorePurchases();
     const isPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
     
@@ -389,16 +624,21 @@ export const restorePurchases = async () => {
  */
 export const canUserScan = async () => {
   try {
-    // Check PRO status first
-    const status = await getSubscriptionStatus();
-    
-    // PRO users have unlimited scans
-    if (status.isPro) {
-      return { 
-        canScan: true, 
-        reason: 'pro',
-        unlimited: true 
-      };
+    // TEST OVERRIDE: Force free tier (bypass PRO check)
+    if (_hasOverride('FORCE_FREE_TIER')) {
+      // Skip PRO check and go straight to quota check
+    } else {
+      // Check PRO status first
+      const status = await getSubscriptionStatus();
+      
+      // PRO users have unlimited scans
+      if (status.isPro) {
+        return { 
+          canScan: true, 
+          reason: 'pro',
+          unlimited: true 
+        };
+      }
     }
     
     // Free users: check monthly quota
@@ -438,6 +678,22 @@ export const canUserScan = async () => {
  */
 export const getMonthlyQuota = async () => {
   try {
+    // TEST OVERRIDE: Force "quota exceeded" (0 remaining)
+    if (_hasOverride('QUOTA_EXCEEDED')) {
+      const now = new Date();
+      const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return {
+        used: FREE_TIER_LIMIT,
+        remaining: 0,
+        limit: FREE_TIER_LIMIT,
+        resetDate: resetDate.toISOString(),
+      };
+    }
+    // TEST OVERRIDE: Force "quota check fail" – throw so caller gets error
+    if (_hasOverride('QUOTA_CHECK_FAIL')) {
+      throw new Error('[TEST] Simulated quota check failure.');
+    }
+
     const user = await getCurrentUser();
     if (!user) {
       console.warn('[Subscriptions] No user authenticated');
@@ -458,7 +714,8 @@ export const getMonthlyQuota = async () => {
       
       const quota = response.data;
       
-      if (quota.is_pro || quota.unlimited) {
+      // TEST OVERRIDE: Force free tier - skip PRO check even if backend says PRO
+      if (!_hasOverride('FORCE_FREE_TIER') && (quota.is_pro || quota.unlimited)) {
         // PRO user
         return {
           used: 0,
@@ -660,11 +917,27 @@ export const getSubscriptionInfo = async (forceRefresh = false) => {
   const status = await getSubscriptionStatus(forceRefresh);
   
   if (!status.isPro) {
-    return {
-      isPro: false,
-      title: 'Free Plan',
-      description: '10 scans per month',
-    };
+    // Get actual quota status to show remaining scans
+    try {
+      const quota = await getMonthlyQuota();
+      const remaining = quota.remaining || 0;
+      const limit = quota.limit || FREE_TIER_LIMIT;
+      return {
+        isPro: false,
+        title: 'Free Plan',
+        description: remaining > 0 ? `${remaining} of ${limit} scans remaining` : `${limit} scans per month`,
+        remaining: remaining,
+        limit: limit,
+        used: quota.used || 0,
+      };
+    } catch (error) {
+      // Fallback if quota check fails
+      return {
+        isPro: false,
+        title: 'Free Plan',
+        description: '10 scans per month',
+      };
+    }
   }
   
   const productId = status.productIdentifier;
@@ -771,6 +1044,73 @@ export const isSubscriptionExpiringSoon = async () => {
 // EXPORTS
 // ============================================================================
 
+/**
+ * Diagnostic function to check subscription system status
+ * Useful for debugging subscription issues
+ */
+export const diagnoseSubscriptions = async () => {
+  const diagnostics = {
+    timestamp: new Date().toISOString(),
+    platform: Platform.OS,
+    isDev: __DEV__,
+    issues: [],
+    status: {},
+  };
+  
+  try {
+    // Check if RevenueCat is configured
+    try {
+      const customerInfo = await Purchases.getCustomerInfo();
+      diagnostics.status.configured = true;
+      diagnostics.status.customerId = customerInfo.originalAppUserId;
+      diagnostics.status.entitlements = Object.keys(customerInfo.entitlements.active);
+    } catch (error) {
+      diagnostics.status.configured = false;
+      diagnostics.issues.push(`RevenueCat not configured: ${error.message}`);
+    }
+    
+    // Check if offerings are available
+    try {
+      const offerings = await Purchases.getOfferings();
+      if (offerings.current) {
+        diagnostics.status.hasOfferings = true;
+        diagnostics.status.packageCount = offerings.current.availablePackages.length;
+      } else {
+        diagnostics.status.hasOfferings = false;
+        diagnostics.issues.push('No current offering configured in RevenueCat dashboard');
+      }
+    } catch (error) {
+      diagnostics.status.hasOfferings = false;
+      diagnostics.issues.push(`Could not fetch offerings: ${error.message}`);
+    }
+    
+    // Check subscription status
+    try {
+      const status = await getSubscriptionStatus();
+      diagnostics.status.isPro = status.isPro;
+      diagnostics.status.productId = status.productIdentifier;
+    } catch (error) {
+      diagnostics.issues.push(`Could not get subscription status: ${error.message}`);
+    }
+    
+    // Check API key
+    const keys = getApiKey();
+    diagnostics.status.apiKey = {
+      ios: keys.ios ? keys.ios.substring(0, 10) + '...' : 'missing',
+      android: keys.android ? keys.android.substring(0, 10) + '...' : 'missing',
+    };
+    
+  } catch (error) {
+    diagnostics.issues.push(`Diagnostic error: ${error.message}`);
+  }
+  
+  if (__DEV__) {
+    console.log('[Subscriptions] Diagnostics:', JSON.stringify(diagnostics, null, 2));
+  }
+  
+  return diagnostics;
+};
+
 export default {
   // Initialization
   initializeSubscriptions,
@@ -795,6 +1135,14 @@ export default {
   
   // Sync
   syncSubscription,
+  
+  // Diagnostics
+  diagnoseSubscriptions,
+  
+  // Test overrides (dev only)
+  setSubscriptionTestOverride,
+  clearSubscriptionTestOverrides,
+  getSubscriptionTestOverrides,
   
   // Constants
   PRODUCT_IDS,

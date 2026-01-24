@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { testBackendConnection } from '../services/backendService';
 import { useAuth } from '../contexts/AuthContext';
-import { getSubscriptionInfo, syncSubscription, openSubscriptionManagement } from '../services/subscriptionService';
+import { getSubscriptionInfo, syncSubscription, openSubscriptionManagement, diagnoseSubscriptions } from '../services/subscriptionService';
 
 export default function SettingsScreen() {
   const [autoSave, setAutoSave] = useState(true);
@@ -268,6 +268,40 @@ export default function SettingsScreen() {
           <Text style={styles.infoLabel}>Developer</Text>
           <Text style={styles.infoValue}>Fishing Lure App</Text>
         </View>
+        
+        {/* Debug: Subscription (Development Only) */}
+        {__DEV__ && (
+          <>
+            <TouchableOpacity
+              style={styles.debugButton}
+              onPress={async () => {
+                try {
+                  const diagnostics = await diagnoseSubscriptions();
+                  Alert.alert(
+                    'Subscription Diagnostics',
+                    `Status: ${diagnostics.status.configured ? '✅ Configured' : '❌ Not Configured'}\n` +
+                    `Offerings: ${diagnostics.status.hasOfferings ? '✅ Available' : '❌ Not Available'}\n` +
+                    `Packages: ${diagnostics.status.packageCount || 0}\n` +
+                    `Is PRO: ${diagnostics.status.isPro ? 'Yes' : 'No'}\n\n` +
+                    `Issues: ${diagnostics.issues.length > 0 ? diagnostics.issues.join(', ') : 'None'}\n\n` +
+                    `Check console for full details.`,
+                    [{ text: 'OK' }]
+                  );
+                } catch (error) {
+                  Alert.alert('Diagnostic Error', error.message);
+                }
+              }}
+            >
+              <Text style={styles.debugButtonText}>🔍 Debug Subscriptions</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.debugButton, { backgroundColor: '#8e44ad', marginTop: 8 }]}
+              onPress={() => navigation.navigate('SubscriptionTest')}
+            >
+              <Text style={styles.debugButtonText}>🧪 Subscription Test – force failures</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
     </ScrollView>
@@ -397,6 +431,18 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 16,
     color: '#7f8c8d',
+  },
+  debugButton: {
+    backgroundColor: '#9b59b6',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  debugButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   dangerButton: {
     backgroundColor: '#e74c3c',

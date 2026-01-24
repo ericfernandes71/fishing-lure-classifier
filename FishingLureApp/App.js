@@ -18,6 +18,7 @@ import LureDetailScreen from './src/screens/LureDetailScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import PaywallScreen from './src/screens/PaywallScreen';
+import SubscriptionTestScreen from './src/screens/SubscriptionTestScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -85,6 +86,13 @@ function SettingsStack() {
           presentation: 'modal'
         }}
       />
+      {__DEV__ && (
+        <Stack.Screen 
+          name="SubscriptionTest" 
+          component={SubscriptionTestScreen} 
+          options={{ title: 'Subscription Test (Dev)' }}
+        />
+      )}
     </Stack.Navigator>
   );
 }

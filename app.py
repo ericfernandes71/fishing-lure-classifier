@@ -98,6 +98,7 @@ def upload_file():
             # Check quota BEFORE analyzing (count all attempts, not just successful ones)
             # CRITICAL: This prevents expensive API calls if quota is exceeded
             user_id = request.form.get('user_id') or request.headers.get('X-User-ID')
+            pending_scan_id = None  # Track pending scan ID for updating later
             
             if user_id:
                 if supabase_service.is_enabled():
@@ -110,6 +111,11 @@ def upload_file():
                                 'message': 'You have used all your free scans this month. Upgrade to PRO for unlimited scans!',
                                 'quota': quota_check
                             }), 403
+                        
+                        # Create pending scan record IMMEDIATELY (counts toward quota even if analysis fails)
+                        pending_scan_id = supabase_service.create_pending_scan(user_id, filename)
+                        if pending_scan_id:
+                            print(f"[OK] Created pending scan record (ID: {pending_scan_id}) - counts toward quota")
                     except Exception as e:
                         # FAIL-SAFE: If quota check fails, DENY the request to prevent unexpected costs
                         print(f"[ERROR] Quota check failed: {e}")
@@ -156,9 +162,9 @@ def upload_file():
             json_file = mobile_classifier.save_analysis_to_json(results)
             results['json_file'] = json_file
             
-            # Save to Supabase if user_id is provided and Supabase is enabled
-            # This counts ALL attempts toward quota, not just successful ones
-            if user_id and supabase_service.is_enabled():
+            # Update Supabase record with analysis results
+            # The scan was already counted when we created the pending record
+            if user_id and supabase_service.is_enabled() and pending_scan_id:
                 try:
                     # Verify we have minimum required data before saving
                     if not results.get('lure_type'):
@@ -170,14 +176,31 @@ def upload_file():
                     if image_url:
                         results['image_url'] = image_url
                     
-                    # Save analysis to Supabase database (counts toward quota)
+                    # Update the pending scan record with analysis results
+                    supabase_result = supabase_service.update_scan_with_results(pending_scan_id, results)
+                    if supabase_result:
+                        results['supabase_id'] = supabase_result.get('id')
+                        print(f"[OK] Updated scan record {pending_scan_id} with analysis results")
+                    else:
+                        # Fallback: if update failed, try creating new record (shouldn't happen)
+                        print(f"[WARNING] Update failed for scan {pending_scan_id}, scan already counted")
+                except Exception as e:
+                    print(f"[WARNING] Supabase update failed: {str(e)}")
+                    # Continue anyway - scan was already counted when pending record was created
+            elif user_id and supabase_service.is_enabled() and not pending_scan_id:
+                # Fallback: if pending scan wasn't created, create it now (legacy behavior)
+                try:
+                    if not results.get('lure_type'):
+                        results['lure_type'] = 'Unknown'
+                    image_url = supabase_service.upload_lure_image(user_id, filepath, filename)
+                    if image_url:
+                        results['image_url'] = image_url
                     supabase_result = supabase_service.save_lure_analysis(user_id, results)
                     if supabase_result:
                         results['supabase_id'] = supabase_result.get('id')
-                        print(f"[OK] Saved to Supabase for user {user_id}")
+                        print(f"[OK] Saved to Supabase for user {user_id} (fallback)")
                 except Exception as e:
                     print(f"[WARNING] Supabase save failed: {str(e)}")
-                    # Continue anyway - local save succeeded
             
             print(f"[OK] Analysis completed successfully")
             print(f"[INFO] Results: {results}")
