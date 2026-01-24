@@ -113,9 +113,12 @@ def upload_file():
                             }), 403
                         
                         # Create pending scan record IMMEDIATELY (counts toward quota even if analysis fails)
+                        print(f"[DEBUG] Attempting to create pending scan for user {user_id}, filename: {filename}")
                         pending_scan_id = supabase_service.create_pending_scan(user_id, filename)
                         if pending_scan_id:
-                            print(f"[OK] Created pending scan record (ID: {pending_scan_id}) - counts toward quota")
+                            print(f"[OK] ✓ Created pending scan record (ID: {pending_scan_id}) - counts toward quota")
+                        else:
+                            print(f"[WARNING] ✗ Failed to create pending scan - will use fallback save method")
                     except Exception as e:
                         # FAIL-SAFE: If quota check fails, DENY the request to prevent unexpected costs
                         print(f"[ERROR] Quota check failed: {e}")

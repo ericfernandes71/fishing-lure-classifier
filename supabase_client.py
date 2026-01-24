@@ -65,7 +65,10 @@ class SupabaseService:
             
             response = self.client.table('lure_analyses').insert(data_to_insert).execute()
             scan_id = response.data[0].get('id') if response.data else None
-            print(f"[OK] Created pending scan record for user {user_id} (ID: {scan_id})")
+            if scan_id:
+                print(f"[OK] ✓ Created pending scan record for user {user_id} (ID: {scan_id})")
+            else:
+                print(f"[ERROR] ✗ Pending scan insert returned no ID - response: {response.data if hasattr(response, 'data') else 'no data'}")
             return scan_id
             
         except Exception as e:
