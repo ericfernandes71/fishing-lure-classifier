@@ -202,8 +202,21 @@ def upload_file():
                     if supabase_result:
                         results['supabase_id'] = supabase_result.get('id')
                         print(f"[OK] Saved to Supabase for user {user_id} (fallback)")
+                    else:
+                        # Last resort: ensure scan is counted for quota (cost protection)
+                        rid = supabase_service.create_pending_scan(user_id, filename)
+                        if rid:
+                            supabase_service.update_scan_with_results(rid, results)
+                            print(f"[OK] Created scan record for quota (last resort), ID: {rid}")
                 except Exception as e:
                     print(f"[WARNING] Supabase save failed: {str(e)}")
+                    # Last resort: minimal insert so quota counts (critical for cost protection)
+                    try:
+                        rid = supabase_service.create_pending_scan(user_id, filename or 'scan')
+                        if rid:
+                            print(f"[OK] Created minimal scan record for quota (ID: {rid})")
+                    except Exception as e2:
+                        print(f"[ERROR] Could not record scan for quota: {e2}")
             
             print(f"[OK] Analysis completed successfully")
             print(f"[INFO] Results: {results}")

@@ -379,7 +379,7 @@ class SupabaseService:
         return True
     
     def get_monthly_scan_count(self, user_id: str) -> int:
-        """Get number of scans this month for user"""
+        """Get number of scans this month for user (counts all rows; used for quota)."""
         if not self.is_enabled():
             return 0
         
@@ -388,15 +388,19 @@ class SupabaseService:
             # Get start of current month in UTC (Supabase stores timestamps in UTC)
             now = datetime.now(timezone.utc)
             start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
-            
+            start_iso = start_of_month.isoformat()
+
+            # Fetch rows for this user this month; count by length so we never get wrong count.
+            # (Some Supabase client versions don't set response.count reliably.)
             response = self.client.table('lure_analyses')\
-                .select('id', count='exact')\
+                .select('id')\
                 .eq('user_id', user_id)\
-                .gte('created_at', start_of_month.isoformat())\
+                .gte('created_at', start_iso)\
+                .limit(1000)\
                 .execute()
-            
-            count = response.count if response.count else 0
-            print(f"[DEBUG] Monthly scan count for user {user_id}: {count} (since {start_of_month.isoformat()})")
+
+            count = len(response.data) if response.data else 0
+            print(f"[DEBUG] Monthly scan count for user {user_id}: {count} (since {start_iso})")
             return count
             
         except Exception as e:
