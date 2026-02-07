@@ -43,12 +43,11 @@ const getApiKey = () => {
   };
 };
 
-// Product IDs (must match App Store Connect / Google Play / RevenueCat exactly)
-// See SUBSCRIPTION_SETUP_FOR_APP_STORES.md
+// Product IDs (must match App Store Connect / RevenueCat exactly)
 export const PRODUCT_IDS = {
-  MONTHLY: 'fishing_lure_pro_monthly',
-  YEARLY: 'fishing_lure_pro_yearly',
-  LIFETIME: 'fishing_lure_pro_lifetime',
+  MONTHLY: 'monthly_pro',
+  YEARLY: 'yearly_pro',
+  LIFETIME: 'lifetime_pro',
 };
 
 // Entitlement ID (set in RevenueCat dashboard) - Must match RevenueCat identifier exactly!
