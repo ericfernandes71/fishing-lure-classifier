@@ -89,7 +89,7 @@ Ideas: Home/scan, analysis result, tackle box, catch tracking, lure detail, subs
 ## 7. Pricing and availability
 
 - **Price**: **Free** (with in-app purchases).
-- **Availability**: All countries (or your chosen territories).
+- **Availability**: In **Pricing and Availability** → **Availability** → choose **Select specific countries and regions** and pick only **Canada** (or your chosen territories). See **CANADA_LAUNCH_AND_TESTING.md** for Canada-only launch and testing with friends.
 
 ---
 

@@ -79,7 +79,10 @@ export default function LureDetailScreen({ route, navigation }) {
   const [shareCardVisible, setShareCardVisible] = useState(false);
   const [shareCardCatchData, setShareCardCatchData] = useState(null); // catch data with optional local image URI for share
   const [isSharing, setIsSharing] = useState(false);
+  const [isSavingCatch, setIsSavingCatch] = useState(false);
   const shareCardRef = useRef(null);
+  const shareTempUriRef = useRef(null);
+  const shareCaptureDoneRef = useRef(false);
 
   // Helper to check if lure is from Supabase (has UUID format)
   const isSupabaseLure = () => {
@@ -251,6 +254,7 @@ export default function LureDetailScreen({ route, navigation }) {
       return;
     }
 
+    setIsSavingCatch(true);
     try {
       // Format weight and length with units
       const weight = catchDetails.weightValue ? `${catchDetails.weightValue} ${catchDetails.weightUnit}` : '';
@@ -356,6 +360,8 @@ export default function LureDetailScreen({ route, navigation }) {
     } catch (error) {
       console.error('[LureDetail] Save catch error:', error);
       Alert.alert('Error', `Failed to ${editingCatchId ? 'update' : 'save'} catch: ${error.message}`);
+    } finally {
+      setIsSavingCatch(false);
     }
   };
 
@@ -366,6 +372,8 @@ export default function LureDetailScreen({ route, navigation }) {
       setIsSharing(true);
       setShareCardCatchData(null);
       setShareCardVisible(false);
+      shareTempUriRef.current = null;
+      shareCaptureDoneRef.current = false;
 
       let tempUriToDelete = null;
       const imageUri = selectedCatch.imageUri;
@@ -375,7 +383,9 @@ export default function LureDetailScreen({ route, navigation }) {
         try {
           tempUriToDelete = FileSystem.cacheDirectory + `share_catch_${Date.now()}.jpg`;
           await FileSystem.downloadAsync(imageUri, tempUriToDelete);
-          setShareCardCatchData({ ...selectedCatch, imageUri: tempUriToDelete });
+          const displayUri = tempUriToDelete.startsWith('file://') ? tempUriToDelete : 'file://' + tempUriToDelete;
+          setShareCardCatchData({ ...selectedCatch, imageUri: displayUri });
+          shareTempUriRef.current = tempUriToDelete;
         } catch (downloadError) {
           console.warn('[LureDetail] Download for share failed, using remote URI:', downloadError);
           setShareCardCatchData(selectedCatch);
@@ -385,30 +395,55 @@ export default function LureDetailScreen({ route, navigation }) {
       }
 
       setShareCardVisible(true);
-
-      setTimeout(async () => {
-        try {
-          await shareCatchCard(shareCardRef);
-        } catch (error) {
-          console.error('[LureDetail] Share error:', error);
-          Alert.alert('Error', `Failed to share catch: ${error.message}`);
-        } finally {
-          if (tempUriToDelete) {
-            try {
-              await FileSystem.deleteAsync(tempUriToDelete, { idempotent: true });
-            } catch (_) {}
+      // Fallback: if onImageLoad never fires (e.g. broken image), capture after 2.5s and cleanup
+      setTimeout(() => {
+        if (shareCaptureDoneRef.current) return;
+        shareCaptureDoneRef.current = true;
+        (async () => {
+          try {
+            await shareCatchCard(shareCardRef);
+          } catch (e) {
+            console.error('[LureDetail] Share fallback error:', e);
+            Alert.alert('Error', `Failed to share catch: ${e.message}`);
+          } finally {
+            if (shareTempUriRef.current) {
+              try { await FileSystem.deleteAsync(shareTempUriRef.current, { idempotent: true }); } catch (_) {}
+              shareTempUriRef.current = null;
+            }
+            setShareCardVisible(false);
+            setShareCardCatchData(null);
+            setIsSharing(false);
           }
-          setShareCardVisible(false);
-          setShareCardCatchData(null);
-          setIsSharing(false);
-        }
-      }, 400);
+        })();
+      }, 2500);
     } catch (error) {
       console.error('[LureDetail] Share error:', error);
       Alert.alert('Error', `Failed to share catch: ${error.message}`);
       setIsSharing(false);
       setShareCardVisible(false);
       setShareCardCatchData(null);
+    }
+  };
+
+  const handleShareCardImageLoad = async () => {
+    if (shareCaptureDoneRef.current) return;
+    shareCaptureDoneRef.current = true;
+    try {
+      await shareCatchCard(shareCardRef);
+    } catch (error) {
+      console.error('[LureDetail] Share error:', error);
+      Alert.alert('Error', `Failed to share catch: ${error.message}`);
+    } finally {
+      const tempUri = shareTempUriRef.current;
+      if (tempUri) {
+        try {
+          await FileSystem.deleteAsync(tempUri, { idempotent: true });
+        } catch (_) {}
+        shareTempUriRef.current = null;
+      }
+      setShareCardVisible(false);
+      setShareCardCatchData(null);
+      setIsSharing(false);
     }
   };
 
@@ -867,10 +902,18 @@ export default function LureDetailScreen({ route, navigation }) {
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.saveButton}
+                style={[styles.saveButton, isSavingCatch && styles.saveButtonDisabled]}
                 onPress={saveCatch}
+                disabled={isSavingCatch}
               >
-                <Text style={styles.saveButtonText}>{editingCatchId ? 'Update Catch' : 'Save Catch'}</Text>
+                {isSavingCatch ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" style={styles.saveButtonSpinner} />
+                    <Text style={styles.saveButtonText}>Saving...</Text>
+                  </>
+                ) : (
+                  <Text style={styles.saveButtonText}>{editingCatchId ? 'Update Catch' : 'Save Catch'}</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -977,7 +1020,11 @@ export default function LureDetailScreen({ route, navigation }) {
               height: 1920,
             }}
           >
-            <CatchShareCard catchData={shareCardCatchData || selectedCatch} lureData={lure} />
+            <CatchShareCard
+              catchData={shareCardCatchData || selectedCatch}
+              lureData={lure}
+              onImageLoad={handleShareCardImageLoad}
+            />
           </ViewShot>
         </View>
       )}
@@ -1336,10 +1383,18 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 1,
+    flexDirection: 'row',
     backgroundColor: '#27ae60',
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonDisabled: {
+    opacity: 0.8,
+  },
+  saveButtonSpinner: {
+    marginRight: 8,
   },
   saveButtonText: {
     fontSize: 16,

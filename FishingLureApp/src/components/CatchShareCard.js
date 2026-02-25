@@ -10,8 +10,9 @@ const CARD_HEIGHT = 1920; // 9:16 aspect ratio for Instagram/Facebook stories
 /**
  * Strava-style catch share card component
  * Photo-dominant design with overlayed metadata
+ * @param {Function} onImageLoad - Called when the background image has loaded (for share capture timing)
  */
-export const CatchShareCard = ({ catchData, lureData }) => {
+export const CatchShareCard = ({ catchData, lureData, onImageLoad }) => {
   const formatDate = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleDateString('en-US', {
@@ -37,6 +38,7 @@ export const CatchShareCard = ({ catchData, lureData }) => {
         source={{ uri: catchData.imageUri }} 
         style={styles.backgroundImage}
         resizeMode="cover"
+        onLoad={() => onImageLoad?.()}
       />
       
       {/* Gradient overlay for text readability - bottom to top */}

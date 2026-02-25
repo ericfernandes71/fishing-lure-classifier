@@ -18,6 +18,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAllCatchesWithLocations } from '../services/supabaseService';
 import { getAllCatchesWithLocations as getAllCatchesLocal } from '../services/storageService';
 import * as Sharing from 'expo-sharing';
+import * as Location from 'expo-location';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking } from 'react-native';
@@ -66,11 +67,12 @@ export default function MapScreen({ navigation }) {
     dateRange: 'all', // 'all', 'week', 'month', 'year'
     favoritesOnly: false,
   });
+  // Default to a wide US view; will move to device location or catches when loaded
   const [region, setRegion] = useState({
-    latitude: 37.78825,
-    longitude: -122.4324,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
+    latitude: 39.5,
+    longitude: -98.5,
+    latitudeDelta: 25,
+    longitudeDelta: 25,
   });
 
   useEffect(() => {
@@ -173,24 +175,37 @@ export default function MapScreen({ navigation }) {
         }
       }
       
-      // Center map on catches if we have any
-      if (allCatches.length > 0) {
-        // Calculate center of all catches
-        const avgLat = allCatches.reduce((sum, c) => sum + c.latitude, 0) / allCatches.length;
-        const avgLng = allCatches.reduce((sum, c) => sum + c.longitude, 0) / allCatches.length;
-        
-        // Calculate bounds
-        const lats = allCatches.map(c => c.latitude);
-        const lngs = allCatches.map(c => c.longitude);
+      // Center map on catches if we have any with location; otherwise center on device location
+      const withLocation = allCatches.filter(c => c.latitude != null && c.longitude != null);
+      if (withLocation.length > 0) {
+        const avgLat = withLocation.reduce((sum, c) => sum + c.latitude, 0) / withLocation.length;
+        const avgLng = withLocation.reduce((sum, c) => sum + c.longitude, 0) / withLocation.length;
+        const lats = withLocation.map(c => c.latitude);
+        const lngs = withLocation.map(c => c.longitude);
         const latDelta = Math.max(...lats) - Math.min(...lats);
         const lngDelta = Math.max(...lngs) - Math.min(...lngs);
-        
         setRegion({
           latitude: avgLat,
           longitude: avgLng,
           latitudeDelta: Math.max(latDelta * 1.5, 0.5),
           longitudeDelta: Math.max(lngDelta * 1.5, 0.5),
         });
+      } else {
+        // No catches with location: center on device location
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({});
+            setRegion({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              latitudeDelta: 0.08,
+              longitudeDelta: 0.08,
+            });
+          }
+        } catch (e) {
+          if (__DEV__) console.warn('[MapScreen] Could not get device location:', e);
+        }
       }
     } catch (error) {
       console.error('[MapScreen] Error loading catches:', error);
