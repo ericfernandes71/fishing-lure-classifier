@@ -18,6 +18,7 @@ import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as FileSystem from 'expo-file-system';
 import ViewShot from 'react-native-view-shot';
 import { addCatchToLure as addCatchLocal, updateCatchFromLure, deleteCatchFromLure } from '../services/storageService';
 import { addCatchToLure as addCatchSupabase, updateCatch, getCatchesForLure, deleteCatch } from '../services/supabaseService';
@@ -76,6 +77,7 @@ export default function LureDetailScreen({ route, navigation }) {
   });
   const [catchLocation, setCatchLocation] = useState(null); // { latitude, longitude }
   const [shareCardVisible, setShareCardVisible] = useState(false);
+  const [shareCardCatchData, setShareCardCatchData] = useState(null); // catch data with optional local image URI for share
   const [isSharing, setIsSharing] = useState(false);
   const shareCardRef = useRef(null);
 
@@ -359,28 +361,54 @@ export default function LureDetailScreen({ route, navigation }) {
 
   const handleShareCatch = async () => {
     if (!selectedCatch) return;
-    
+
     try {
       setIsSharing(true);
+      setShareCardCatchData(null);
+      setShareCardVisible(false);
+
+      let tempUriToDelete = null;
+      const imageUri = selectedCatch.imageUri;
+      const isRemote = imageUri && !imageUri.startsWith('file://') && !imageUri.startsWith('content://') && !imageUri.startsWith('data:');
+
+      if (isRemote) {
+        try {
+          tempUriToDelete = FileSystem.cacheDirectory + `share_catch_${Date.now()}.jpg`;
+          await FileSystem.downloadAsync(imageUri, tempUriToDelete);
+          setShareCardCatchData({ ...selectedCatch, imageUri: tempUriToDelete });
+        } catch (downloadError) {
+          console.warn('[LureDetail] Download for share failed, using remote URI:', downloadError);
+          setShareCardCatchData(selectedCatch);
+        }
+      } else {
+        setShareCardCatchData(selectedCatch);
+      }
+
       setShareCardVisible(true);
-      
-      // Wait a bit for the card to render
+
       setTimeout(async () => {
         try {
           await shareCatchCard(shareCardRef);
-          setShareCardVisible(false);
         } catch (error) {
           console.error('[LureDetail] Share error:', error);
           Alert.alert('Error', `Failed to share catch: ${error.message}`);
         } finally {
+          if (tempUriToDelete) {
+            try {
+              await FileSystem.deleteAsync(tempUriToDelete, { idempotent: true });
+            } catch (_) {}
+          }
+          setShareCardVisible(false);
+          setShareCardCatchData(null);
           setIsSharing(false);
         }
-      }, 500);
+      }, 400);
     } catch (error) {
       console.error('[LureDetail] Share error:', error);
       Alert.alert('Error', `Failed to share catch: ${error.message}`);
       setIsSharing(false);
       setShareCardVisible(false);
+      setShareCardCatchData(null);
     }
   };
 
@@ -938,18 +966,18 @@ export default function LureDetailScreen({ route, navigation }) {
       </Modal>
 
       {/* Hidden Share Card for Capture */}
-      {shareCardVisible && selectedCatch && (
+      {shareCardVisible && (shareCardCatchData || selectedCatch) && (
         <View style={styles.shareCardContainer} pointerEvents="none">
           <ViewShot 
             ref={shareCardRef} 
-              options={{ 
+            options={{ 
               format: 'jpg', 
               quality: 0.95,
               width: 1080,
               height: 1920,
             }}
           >
-            <CatchShareCard catchData={selectedCatch} lureData={lure} />
+            <CatchShareCard catchData={shareCardCatchData || selectedCatch} lureData={lure} />
           </ViewShot>
         </View>
       )}
