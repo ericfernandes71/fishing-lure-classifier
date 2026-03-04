@@ -1,12 +1,12 @@
 # App Store Connect Setup – My Tackle Box
 
-Use this to set up (or finish) your app in App Store Connect. Order matters: do **In-App Purchases** first so they’re ready before you submit a build.
+Use this to set up (or finish) your app in App Store Connect. Order matters: do **In-App Purchases** first so they're ready before you submit a build.
 
 ---
 
 ## 1. In-App Purchases (subscriptions)
 
-Product IDs **must** match RevenueCat: `monthly_pro`, `yearly_pro`, `lifetime_pro`.
+Product IDs **must** match RevenueCat: `monthly_pro`, `yearly_pro`. (No lifetime option.)
 
 1. In App Store Connect go to **My Apps** → **My Tackle Box** → **Features** → **In-App Purchases**.
 2. Click **+** to add in-app purchases.
@@ -15,24 +15,21 @@ Product IDs **must** match RevenueCat: `monthly_pro`, `yearly_pro`, `lifetime_pr
 
 - Create (or use existing) **Subscription Group**: e.g. **My Tackle Box Subscriptions**.
 
-### Add three subscriptions
+### Add two subscriptions (monthly + yearly only)
 
-For each, **Reference Name** is for you; **Product ID** is what the app and RevenueCat use (must match exactly).
+**Early adoption pricing** — these prices are locked in for our first wave of users and may change later.
 
 | Reference Name              | Product ID   | Type        |
 |-----------------------------|-------------|-------------|
 | Monthly Pro Subscription    | `monthly_pro`   | Auto-Renewable |
 | Yearly Pro Subscription     | `yearly_pro`    | Auto-Renewable |
-| Lifetime Pro Access         | `lifetime_pro`  | Non-Consumable* or Auto-Renewable (see below) |
 
-\* For a true “lifetime” one-time purchase, use **Non-Consumable** if your app supports it; otherwise use a long auto-renewable (e.g. 1 year) and treat it as “lifetime” in the app.
-
-For each subscription:
+For each:
 
 - **Subscription Duration**: Monthly → 1 month, Yearly → 1 year.
-- **Price**: Choose your price (e.g. $9.99 monthly, $79.99 yearly, $99.99 lifetime).
-- **Display Name** (what users see): e.g. “Monthly Pro”, “Yearly Pro”, “Lifetime Pro Access”.
-- **Description**: Short line describing the plan.
+- **Price**: **$4.99/month** and **$39.99/year** (early adoption).
+- **Display Name**: e.g. Monthly Pro, Yearly Pro.
+- **Description**: Short line describing the plan (unlimited scans, catch tracking, etc.).
 - Submit for review with the app (or when ready).
 
 ---
@@ -51,7 +48,7 @@ For each subscription:
 | **Marketing URL** | (optional) |
 | **Privacy Policy URL** | https://ericfernandes71.github.io/fishing-lure-classifier/PRIVACY_POLICY.html |
 
-**Description** (4000 chars): Use the full text from `APP_STORE_LISTING_SETUP_GUIDE.md` or `APP_STORE_ASSETS_MYTACKLEBOX.md` (the long description with features, free tier, PRO monthly/yearly/lifetime, support email, legal links).
+**Description** (4000 chars): Use the full text from `APP_STORE_LISTING_SETUP_GUIDE.md` or `APP_STORE_ASSETS_MYTACKLEBOX.md` (the long description with features, free tier, PRO monthly/yearly, support email, legal links).
 
 ---
 
@@ -67,8 +64,8 @@ Ideas: Home/scan, analysis result, tackle box, catch tracking, lure detail, subs
 ## 4. Version and build
 
 - **Version**: e.g. 1.0.0 (must be higher than any previously submitted).
-- **What’s New**: Short “What’s New in This Version” (e.g. initial release or your current changes).
-- **Build**: After you upload a build (via EAS Submit or Xcode), choose that build here. You can’t submit until a build is selected.
+- **What's New**: Short "What's New in This Version" (e.g. initial release or your current changes).
+- **Build**: After you upload a build (via EAS Submit or Xcode), choose that build here. You can't submit until a build is selected.
 
 ---
 
@@ -76,7 +73,7 @@ Ideas: Home/scan, analysis result, tackle box, catch tracking, lure detail, subs
 
 - **Contact**: First name, last name, phone, email (e.g. mytackleboxapp@gmail.com).
 - **Demo account**: If the app requires login, provide a test account and password for Apple.
-- **Notes**: Anything that helps reviewers (e.g. “Subscription can be tested with Sandbox account”).
+- **Notes**: Anything that helps reviewers (e.g. "Subscription can be tested with Sandbox account").
 
 ---
 
@@ -96,16 +93,16 @@ Ideas: Home/scan, analysis result, tackle box, catch tracking, lure detail, subs
 ## Quick checklist
 
 - [ ] Subscription group created
-- [ ] Three products added: `monthly_pro`, `yearly_pro`, `lifetime_pro` (names/prices set)
+- [ ] Two products added: `monthly_pro`, `yearly_pro` (names/prices set: $4.99/mo, $39.99/yr)
 - [ ] App info filled: name, subtitle, description, keywords, Support URL, Privacy Policy URL
 - [ ] Screenshots uploaded (at least for 6.7" iPhone)
-- [ ] Version number and “What’s New” set
+- [ ] Version number and "What's New" set
 - [ ] Build selected (after you upload via EAS Submit)
 - [ ] Review contact and demo account (if needed) set
 - [ ] Pricing: Free; availability set
 
 ---
 
-**More detail:**  
-- Full description and copy: `APP_STORE_LISTING_SETUP_GUIDE.md`, `APP_STORE_ASSETS_MYTACKLEBOX.md`  
+**More detail:**
+- Full description and copy: `APP_STORE_LISTING_SETUP_GUIDE.md`, `APP_STORE_ASSETS_MYTACKLEBOX.md`
 - Build and submit: `FishingLureApp/APPLE_STORE_LAUNCH_CHECKLIST.md`

@@ -309,34 +309,21 @@ const PackageCard = ({ package: pkg, isSelected, onPress }) => {
 
 const getPackageTitle = (pkg) => {
   const id = pkg.identifier.toLowerCase();
-  
-  if (id.includes('lifetime')) return 'Lifetime Access';
   if (id.includes('annual') || id.includes('yearly')) return 'Annual';
   if (id.includes('month')) return 'Monthly';
-  
   return pkg.product.title;
 };
 
 const getPackageDescription = (pkg) => {
   const id = pkg.identifier.toLowerCase();
-  
-  if (id.includes('lifetime')) return 'Pay once, use forever';
   if (id.includes('annual') || id.includes('yearly')) return 'Billed once per year';
   if (id.includes('month')) return 'Billed monthly';
-  
   return pkg.product.description;
 };
 
 const getPackageSavings = (pkg) => {
   const id = pkg.identifier.toLowerCase();
-  
-  if (id.includes('annual') || id.includes('yearly')) {
-    return 'Save 33%';
-  }
-  if (id.includes('lifetime')) {
-    return 'Best Deal';
-  }
-  
+  if (id.includes('annual') || id.includes('yearly')) return 'Save 33%';
   return null;
 };
 

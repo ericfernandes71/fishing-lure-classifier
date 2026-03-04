@@ -187,10 +187,8 @@ export default function SettingsScreen() {
                   )}
                 </TouchableOpacity>
                 
-                {/* Cancel Subscription Button - Only show for recurring subscriptions (not lifetime) */}
-                {subscriptionInfo.isPro && 
-                 subscriptionInfo.badge !== 'Lifetime' && 
-                 subscriptionInfo.willRenew !== false && (
+                {/* Cancel Subscription - show for monthly/yearly (recurring) */}
+                {subscriptionInfo.isPro && subscriptionInfo.willRenew !== false && (
                   <TouchableOpacity 
                     style={styles.cancelSubscriptionButton}
                     onPress={async () => {

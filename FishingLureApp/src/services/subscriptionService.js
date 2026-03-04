@@ -44,10 +44,10 @@ const getApiKey = () => {
 };
 
 // Product IDs (must match App Store Connect / RevenueCat exactly)
+// Monthly and yearly only; no lifetime option.
 export const PRODUCT_IDS = {
   MONTHLY: 'monthly_pro',
   YEARLY: 'yearly_pro',
-  LIFETIME: 'lifetime_pro',
 };
 
 // Entitlement ID (set in RevenueCat dashboard) - Must match RevenueCat identifier exactly!
@@ -200,8 +200,7 @@ export const refreshCustomerInfo = async () => {
 
 /**
  * Get current subscription status
- * Returns whether user has PRO access and details
- * Prioritizes recurring subscriptions (monthly/yearly) over lifetime when both exist
+ * Returns whether user has PRO access and details (monthly or yearly only).
  */
 export const getSubscriptionStatus = async (forceRefresh = false) => {
   try {
@@ -254,13 +253,10 @@ export const getSubscriptionStatus = async (forceRefresh = false) => {
     // Check if user has an active recurring subscription (monthly or yearly)
     const hasActiveMonthly = hasProduct(activeSubscriptions, PRODUCT_IDS.MONTHLY);
     const hasActiveYearly = hasProduct(activeSubscriptions, PRODUCT_IDS.YEARLY);
-    const hasLifetime = allPurchasedProducts.includes(PRODUCT_IDS.LIFETIME);
     
-    // Get the entitlement object (RevenueCat returns one entitlement, might be lifetime)
+    // Get the entitlement object (RevenueCat returns one entitlement)
     let entitlement = customerInfo.entitlements.active[ENTITLEMENT_ID];
     
-    // If user has an active recurring subscription AND lifetime, prioritize the recurring one
-    // This shows what they're currently paying for, not just what grants access
     if (entitlement && (hasActiveMonthly || hasActiveYearly)) {
       // Check if the active subscription is actually granting the entitlement
       // If monthly/yearly is active, use that product identifier even if entitlement shows lifetime
@@ -300,17 +296,11 @@ export const getSubscriptionStatus = async (forceRefresh = false) => {
         expirationDate: entitlement?.expirationDate,
         hasActiveMonthly,
         hasActiveYearly,
-        hasLifetime,
       });
     }
     
-    // Check if it's a lifetime purchase
-    const isLifetime = entitlement?.willRenew === false && 
-                       entitlement?.productIdentifier === PRODUCT_IDS.LIFETIME;
-    
     return {
       isPro,
-      isLifetime,
       expirationDate: entitlement?.expirationDate || null,
       productIdentifier: entitlement?.productIdentifier || null,
       willRenew: entitlement?.willRenew || false,
@@ -323,7 +313,7 @@ export const getSubscriptionStatus = async (forceRefresh = false) => {
     try {
       const user = await getCurrentUser();
       if (!user) {
-        return { isPro: false, isLifetime: false };
+        return { isPro: false };
       }
       
       // Use backend API to check subscription status
@@ -336,13 +326,13 @@ export const getSubscriptionStatus = async (forceRefresh = false) => {
       
       return {
         isPro: subscription.is_pro || false,
-        isLifetime: subscription.subscription_type === 'lifetime',
         productIdentifier: subscription.product_identifier,
         expirationDate: subscription.expires_at,
+        willRenew: subscription.will_renew,
       };
     } catch (fallbackError) {
       console.warn('[Subscriptions] Backend check failed, assuming free tier');
-      return { isPro: false, isLifetime: false };
+      return { isPro: false };
     }
   }
 };
@@ -474,13 +464,6 @@ const getFallbackPackages = () => {
       'Unlimited scans, billed annually',
       '$39.99/year',
       'ANNUAL'
-    ),
-    createMockPackage(
-      PRODUCT_IDS.LIFETIME,
-      'Lifetime PRO',
-      'One-time payment, lifetime access',
-      '$99.99',
-      'LIFETIME'
     ),
   ];
 };
@@ -846,8 +829,6 @@ const syncSubscriptionToSupabase = async (customerInfo) => {
         subscriptionType = 'monthly';
       } else if (productId === PRODUCT_IDS.YEARLY) {
         subscriptionType = 'yearly';
-      } else if (productId === PRODUCT_IDS.LIFETIME) {
-        subscriptionType = 'lifetime';
       }
     }
     
@@ -941,15 +922,6 @@ export const getSubscriptionInfo = async (forceRefresh = false) => {
   
   const productId = status.productIdentifier;
   
-  if (productId === PRODUCT_IDS.LIFETIME) {
-    return {
-      isPro: true,
-      title: 'Lifetime PRO',
-      description: 'Unlimited access forever',
-      badge: 'Lifetime',
-    };
-  }
-  
   if (productId === PRODUCT_IDS.YEARLY) {
     return {
       isPro: true,
@@ -1028,7 +1000,7 @@ export const openSubscriptionManagement = async () => {
 export const isSubscriptionExpiringSoon = async () => {
   const status = await getSubscriptionStatus();
   
-  if (!status.isPro || !status.expirationDate || status.isLifetime) {
+  if (!status.isPro || !status.expirationDate) {
     return false;
   }
   

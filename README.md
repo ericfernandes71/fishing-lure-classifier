@@ -123,17 +123,18 @@ const REVENUECAT_API_KEY_ANDROID = 'your-android-key';
 
 ### 3. Create Subscription Products
 
-**Product IDs (same for both stores):**
-- `fishing_lure_pro_monthly` - $4.99/month
-- `fishing_lure_pro_yearly` - $39.99/year
-- `fishing_lure_pro_lifetime` - $49.99 one-time
+**Product IDs (same for both stores):** `monthly_pro`, `yearly_pro` (no lifetime).
+- `monthly_pro` - $4.99/month
+- `yearly_pro` - $39.99/year
+
+**Early adoption pricing** — locked in for our first wave of users.
 
 **iOS:** Create in App Store Connect → In-App Purchases
 **Android:** Create in Google Play Console → Monetization → Subscriptions
 
 ### 4. Configure RevenueCat
 1. Dashboard → Entitlements → Create "pro"
-2. Attach all 3 products to "pro" entitlement
+2. Attach monthly and yearly products to "pro" entitlement
 3. Connect Apple App Store & Google Play Store
 
 **Full guide:** See `FishingLureApp/SUBSCRIPTION_SETUP.md`
@@ -147,7 +148,8 @@ const REVENUECAT_API_KEY_ANDROID = 'your-android-key';
 | **Free** | $0 | 10 scans/month, basic features |
 | **PRO Monthly** | $4.99/mo | Unlimited scans, catches, advanced features |
 | **PRO Yearly** | $39.99/yr | Save 33%, all PRO features |
-| **Lifetime** | $49.99 | One-time, all features forever |
+
+*Current PRO prices are early adoption pricing and stay for our first wave of users.*
 
 **Cost per scan:** ~$0.001 (GPT-4o-mini)
 **Profit margin:** ~90% on PRO subscriptions

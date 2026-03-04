@@ -54,12 +54,12 @@ You agree NOT to:
 
 ### Free Tier
 Our App offers a free tier with limited features:
-- **3 lure analyses per month** (subject to change)
+- **10 lure analyses per month** (subject to change)
 - Basic tackle box features
 - Limited catch tracking
 
-### Premium Subscriptions
-We offer the following premium subscription options:
+### Premium Subscriptions (early adoption pricing)
+We offer monthly and yearly PRO subscriptions. **Current prices are early adoption pricing** and will remain in place for our first wave of users; we may change pricing later with notice.
 
 #### PRO Monthly Subscription
 - **Price:** $4.99 USD per month
@@ -76,12 +76,6 @@ We offer the following premium subscription options:
 - **Features:** Same as PRO Monthly
 - **Billing:** Charged annually on your subscription anniversary date
 - **Auto-Renewal:** Automatically renews each year unless cancelled
-
-#### Lifetime Purchase
-- **Price:** $49.99 USD (one-time payment)
-- **Features:** Same as PRO subscriptions
-- **Duration:** Lifetime access to premium features
-- **Non-Refundable:** Lifetime purchases are final and non-refundable
 
 ### Subscription Management
 
@@ -123,7 +117,6 @@ We offer the following premium subscription options:
 - Contact Apple Support or Google Play Support for refund requests
 
 #### Our Refund Policy
-- **Lifetime Purchases:** Non-refundable once purchased
 - **Subscriptions:** Refunds are handled through the app store according to their policies
 - **Free Trial:** If you cancel during a free trial period, you will not be charged
 - **Technical Issues:** We may provide refunds or credits at our sole discretion for verified technical issues
@@ -283,9 +276,8 @@ For questions about these Terms, please contact us at:
 
 **Key Points:**
 - You must be 13+ to use the App
-- Free tier: 3 scans/month
-- Premium: $4.99/month or $39.99/year
-- Lifetime: $49.99 one-time
+- Free tier: 10 scans/month
+- Premium: $4.99/month or $39.99/year (early adoption pricing)
 - Cancel subscriptions through app store
 - AI analysis is for informational purposes only
 - We're not liable for fishing-related incidents
