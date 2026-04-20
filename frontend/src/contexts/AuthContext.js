@@ -24,11 +24,29 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      if (error) {
+        const msg = error.message || '';
+        const stale =
+          msg.includes('Refresh Token') ||
+          msg.includes('refresh_token') ||
+          msg.includes('Invalid JWT');
+        if (stale) {
+          console.warn('[Auth] Clearing stale session:', msg);
+          await supabase.auth.signOut({ scope: 'local' });
+        } else {
+          console.warn('[Auth] getSession error:', msg);
+        }
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       setSession(session);
       const user = session?.user ?? null;
       setUser(user);
-      
+
       // Initialize RevenueCat if user is already logged in
       if (user) {
         try {
@@ -39,7 +57,7 @@ export const AuthProvider = ({ children }) => {
           // Don't block app if RevenueCat fails
         }
       }
-      
+
       setLoading(false);
     });
 
