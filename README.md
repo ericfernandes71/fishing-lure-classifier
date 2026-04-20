@@ -45,58 +45,44 @@ AI-powered fishing lure identification app with cloud sync, subscription managem
 git clone <your-repo-url>
 cd "Fishing Lure"
 
-# Install backend dependencies
+# Backend (Flask) — from repo root
+cd backend
 pip install -r requirements.txt
 
-# Install mobile app dependencies
-cd FishingLureApp
+# Mobile app (Expo) — from repo root
+cd ../frontend
 npm install
 ```
 
 ### 2. Configure Environment
 
-Create `.env` file in the root directory:
-
-```env
-# OpenAI
-OPENAI_API_KEY=your-openai-key
-
-# Flask
-FLASK_HOST=0.0.0.0
-FLASK_PORT=5000
-FLASK_DEBUG=False
-
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-```
-
-See `env_template.txt` for full configuration options.
+- **Flask / OpenAI / Supabase (server):** copy `backend/.env.example` to `backend/.env` and fill in values.
+- **Expo app (public keys only):** copy `frontend/.env.example` to `frontend/.env` and set `EXPO_PUBLIC_*` variables as documented there.
 
 ### 3. Set Up Supabase Database
 
-Run these SQL files in Supabase SQL Editor (in order):
+Run these SQL files from the `database/` folder in the Supabase SQL Editor (in order):
 
-```sql
-1. supabase_schema.sql              -- Main tables
-2. supabase_subscriptions_schema.sql -- Subscription tracking
-3. supabase_security_patch.sql       -- Security fixes
-4. supabase_add_favorites.sql        -- Favorites feature
-5. supabase_soft_delete.sql          -- Soft delete (prevents quota abuse)
+```text
+1. database/supabase_schema.sql
+2. database/supabase_subscriptions_schema.sql
+3. database/supabase_security_patch.sql
+4. database/supabase_add_favorites.sql
+5. database/supabase_soft_delete.sql
 ```
 
 ### 4. Run Backend
 
 ```bash
+cd backend
 python app.py
-# Server runs on http://localhost:5000
+# Server runs on http://localhost:5000 (or FLASK_PORT from .env)
 ```
 
 ### 5. Run Mobile App
 
 ```bash
-cd FishingLureApp
+cd frontend
 npx expo start
 
 # Press 'a' for Android, 'i' for iOS
@@ -114,7 +100,7 @@ npx expo start
 1. Sign up at https://app.revenuecat.com/signup
 2. Create project
 3. Get API keys for iOS and Android
-4. Update `FishingLureApp/src/services/subscriptionService.js`:
+4. Configure RevenueCat keys via `frontend/.env` (`EXPO_PUBLIC_RC_*`) and `frontend/src/services/subscriptionService.js` as needed:
 
 ```javascript
 const REVENUECAT_API_KEY_IOS = 'your-ios-key';
@@ -137,7 +123,7 @@ const REVENUECAT_API_KEY_ANDROID = 'your-android-key';
 2. Attach monthly and yearly products to "pro" entitlement
 3. Connect Apple App Store & Google Play Store
 
-**Full guide:** See `FishingLureApp/SUBSCRIPTION_SETUP.md`
+**Full guide:** See `frontend/SUBSCRIPTION_SETUP.md`
 
 ---
 
@@ -160,24 +146,24 @@ const REVENUECAT_API_KEY_ANDROID = 'your-android-key';
 
 ```
 Fishing Lure/
-├── FishingLureApp/              # React Native mobile app
+├── frontend/                    # Expo React Native app
 │   ├── src/
-│   │   ├── screens/             # App screens
-│   │   ├── services/            # API services
-│   │   │   ├── subscriptionService.js   # RevenueCat
-│   │   │   ├── supabaseService.js       # Database
-│   │   │   └── storageService.js        # Local storage
-│   │   └── contexts/            # React contexts
+│   │   ├── screens/
+│   │   ├── services/
+│   │   └── contexts/
 │   └── package.json
 │
-├── app.py                       # Flask backend
-├── mobile_lure_classifier.py    # AI classification
-├── supabase_client.py           # Supabase integration
-├── config.py                    # Configuration
-├── requirements.txt             # Python dependencies
+├── backend/                     # Flask API
+│   ├── app.py
+│   ├── mobile_lure_classifier.py
+│   ├── supabase_client.py
+│   ├── config.py
+│   ├── requirements.txt
+│   └── templates/
 │
-├── supabase_*.sql               # Database schemas
-└── templates/                   # HTML templates (web UI)
+├── database/                    # Supabase SQL migrations
+├── docs/                        # Guides and legal copy
+└── render.yaml                  # Render Blueprint (rootDir: backend)
 ```
 
 ---
@@ -216,11 +202,11 @@ Fishing Lure/
 ### Test Backend
 
 ```bash
-# Run backend tests
+cd backend
 python test_production.py
-
-# Test Supabase connection
 python test_supabase_connection.py
+# Unit tests (install once: pip install pytest)
+pytest tests/
 ```
 
 ---
@@ -230,7 +216,7 @@ python test_supabase_connection.py
 ### Mobile App (Expo EAS)
 
 ```bash
-cd FishingLureApp
+cd frontend
 
 # Build for iOS
 eas build --platform ios --profile production
@@ -243,7 +229,9 @@ eas submit --platform ios
 eas submit --platform android
 ```
 
-### Backend (Railway/Render)
+### Backend (Render)
+
+Set environment variables on the web service. **Root Directory** in Render should be `backend` (or use the repo-root `render.yaml` Blueprint with `rootDir: backend`).
 
 **Environment Variables to Set:**
 - `OPENAI_API_KEY`
@@ -252,12 +240,14 @@ eas submit --platform android
 - `FLASK_HOST=0.0.0.0`
 - `FLASK_PORT=5000`
 
+**Start command:** `gunicorn --bind 0.0.0.0:$PORT app:app`
+
 ---
 
 ## 🐛 Troubleshooting
 
 ### "Supabase credentials not found"
-- Create `.env` file from `env_template.txt`
+- Create `backend/.env` from `backend/.env.example`
 - Add your Supabase URL and keys
 
 ### "Failed to save to Supabase"
@@ -271,8 +261,7 @@ eas submit --platform android
 
 ### App won't build
 ```bash
-# Clear cache and rebuild
-cd FishingLureApp
+cd frontend
 rm -rf node_modules
 npm install
 npx expo start -c
