@@ -6,7 +6,7 @@ setup:
 
 # Start the Flask backend with secrets injected by Doppler
 dev-backend:
-	cd backend && doppler run -- python app.py
+	cd backend && doppler run -- .venv/bin/python3 app.py
 
 # Start the Expo dev server with secrets injected by Doppler
 dev-frontend:
