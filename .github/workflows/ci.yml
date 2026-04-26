@@ -22,16 +22,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Fetch secrets from Doppler
-        uses: dopplerhq/secrets-fetch-action@v1
-        with:
-          doppler-token: ${{ secrets.DOPPLER_TOKEN }}
-          doppler-project: my-tackle-box
-          doppler-config: prd_my-tackle-box
-          inject-env-vars: true
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
 
       - name: Run tests
-        run: cd backend && python -m pytest tests/ -v
+        run: cd backend && doppler run --project my-tackle-box --config prd_my-tackle-box -- python -m pytest tests/ -v
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
 
   # ── Frontend ───────────────────────────────────────────────────────────────
   frontend:
