@@ -14,12 +14,14 @@ import {
   Alert,
   SafeAreaView,
   Dimensions,
+  Linking,
 } from 'react-native';
 import {
   getSubscriptionPackages,
   purchaseSubscription,
   restorePurchases,
 } from '../services/subscriptionService';
+import { LEGAL } from '../core/config';
 
 const { width } = Dimensions.get('window');
 
@@ -188,6 +190,32 @@ export default function PaywallScreen({ navigation, route }) {
             />
           ))}
         </View>
+
+        {/* App Store 3.1.2: subscription title, length, price + legal links */}
+        {selectedPackage && (
+          <View style={styles.subscriptionLegal}>
+            <Text style={styles.subscriptionLegalTitle}>Selected subscription</Text>
+            <Text style={styles.subscriptionLegalLine}>
+              {selectedPackage.product?.title || 'PRO'} — {getPackageTitle(selectedPackage)} —{' '}
+              {getPackageDescription(selectedPackage)} — {selectedPackage.product?.priceString ?? ''}
+            </Text>
+            <View style={styles.legalLinksRow}>
+              <Text
+                style={styles.legalLink}
+                onPress={() => Linking.openURL(LEGAL.privacyPolicyUrl)}
+              >
+                Privacy Policy
+              </Text>
+              <Text style={styles.legalLinkSeparator}> · </Text>
+              <Text
+                style={styles.legalLink}
+                onPress={() => Linking.openURL(LEGAL.termsOfUseUrl)}
+              >
+                Terms of Use (EULA)
+              </Text>
+            </View>
+          </View>
+        )}
         
         {/* Purchase Button */}
         <TouchableOpacity
@@ -220,6 +248,15 @@ export default function PaywallScreen({ navigation, route }) {
           Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current period.
           Payment will be charged to your App Store/Google Play account.
         </Text>
+        <View style={styles.legalLinksRowFooter}>
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(LEGAL.privacyPolicyUrl)}>
+            Privacy Policy
+          </Text>
+          <Text style={styles.legalLinkSeparator}> · </Text>
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(LEGAL.termsOfUseUrl)}>
+            Terms of Use (EULA)
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -560,6 +597,50 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 8,
+  },
+  subscriptionLegal: {
+    marginBottom: 16,
+    padding: 14,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  subscriptionLegalTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+  },
+  subscriptionLegalLine: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  legalLinksRowFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  legalLink: {
+    fontSize: 13,
+    color: '#2196F3',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  legalLinkSeparator: {
+    fontSize: 13,
+    color: '#999',
   },
 });
 

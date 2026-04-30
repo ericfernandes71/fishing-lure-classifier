@@ -41,6 +41,16 @@ export const AUTH = {
   passwordResetRedirectUrl: process.env.EXPO_PUBLIC_PASSWORD_RESET_URL ?? '',
 };
 
+/** Public legal URLs (App Store 3.1.2 — must appear in the subscription purchase UI). */
+export const LEGAL = {
+  privacyPolicyUrl:
+    process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL ??
+    'https://sameasabove.github.io/fishing-lure-classifier/backend/PRIVACY_POLICY.html',
+  termsOfUseUrl:
+    process.env.EXPO_PUBLIC_TERMS_OF_USE_URL ??
+    'https://sameasabove.github.io/fishing-lure-classifier/backend/TERMS_OF_SERVICE.html',
+};
+
 export const SUBSCRIPTION = {
   entitlementId: 'MyTackleBox Pro',
   freeTierLimit: 10,
